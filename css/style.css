@@ -91,7 +91,7 @@ body.lite .orb { animation: none; }
 #fx { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
 
 /* ---------- screens ---------- */
-#app { position: fixed; inset: 0; z-index: 1; }
+#app { position: fixed; top: 0; left: 0; right: 0; height: 100%; z-index: 1; will-change: transform; }
 .screen {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
@@ -584,3 +584,19 @@ body.lite .ring-timer .rt-fg { filter: none; }
 @keyframes lrSlam { 0% { opacity: 0; transform: scale(2.6) rotate(-14deg); } 60% { opacity: 1; } 100% { transform: scale(1) rotate(0); } }
 .prompt-card.enter .letter-tile { animation: tilePop .55s .1s var(--ease-back) both; }
 @keyframes tilePop { from { transform: scale(1.8); } }
+
+/* ---------- keyboard open: compact answer screen, timer always visible ---------- */
+body.kb #answer { padding-top: calc(var(--safe-t) + 4px); }
+body.kb #answer .hud { min-height: 46px; }
+body.kb .answer-body { gap: 10px; padding-top: 4px; }
+body.kb .prompt-card { padding: 10px 14px; gap: 12px; border-radius: 18px; }
+body.kb .ring-timer { width: 78px; height: 78px; }
+body.kb .ring-timer .letter-tile { width: 56px; height: 56px; font-size: 36px; border-radius: 15px; }
+body.kb .prompt-main { font-size: clamp(20px, 6vw, 26px); }
+body.kb .prompt-label { display: none; }
+body.kb #answerInput, body.kb .mic-btn { height: 54px; }
+body.kb .mic-btn { width: 54px; }
+body.kb #lockBtn { min-height: 52px; font-size: 22px; }
+body.kb .final-badge { display: none; }
+body.kb .timer-track { height: calc(var(--safe-t) + 8px); }
+body.kb .timer-num { font-size: 32px; min-width: 70px; }

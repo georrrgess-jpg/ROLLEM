@@ -859,6 +859,29 @@
   // pause the clock if the app is backgrounded mid-answer
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseTimer('hidden'); else resumeTimer('hidden'); });
 
+  // ---------- keyboard-aware viewport ----------
+  // iOS doesn't shrink the page when the keyboard opens; it scrolls the page up instead, which pushed
+  // the timer off-screen. Pin the app to the *visible* viewport so the HUD stays on top, and switch to
+  // a compact answer layout while the keyboard is up.
+  const vv = window.visualViewport;
+  let fullH = vv ? vv.height : window.innerHeight;
+  function fitViewport() {
+    if (!vv) return;
+    const h = vv.height, top = vv.offsetTop;
+    if (h > fullH) fullH = h;
+    const app = document.getElementById('app');
+    app.style.height = h + 'px';
+    app.style.transform = top ? `translate3d(0, ${top}px, 0)` : '';
+    document.body.classList.toggle('kb', fullH - h > 140 || document.activeElement === input);
+  }
+  if (vv) {
+    vv.addEventListener('resize', fitViewport);
+    vv.addEventListener('scroll', fitViewport);
+    window.addEventListener('orientationchange', () => setTimeout(() => { fullH = vv.height; fitViewport(); }, 400));
+  }
+  input.addEventListener('focus', () => { document.body.classList.add('kb'); setTimeout(() => { window.scrollTo(0, 0); fitViewport(); }, 60); });
+  input.addEventListener('blur', () => { document.body.classList.remove('kb'); setTimeout(fitViewport, 60); });
+
   // ---------- boot ----------
   renderSound();
   if (!bank.dieLetters.length) toast('Prompt packs failed to load.', 5000);
