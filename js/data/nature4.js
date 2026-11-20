@@ -14,13 +14,13 @@ window.ROLLEM_DATA.push(
   O: ["Ostrich", "Oryx", "Okapi", "Owl", "Oxpecker", "Olive Baboon", "Otter"],
   P: ["Python", "Porcupine", "Pangolin", "Puff Adder", "Pelican", "Parrot", "Pygmy Hippo", "Panther", "Patas Monkey", "Plover"],
   R: ["Rhino|Rhinoceros", "Roan Antelope", "Reedbuck", "Rock Hyrax", "Rock Python", "Ratel", "Red Colobus"],
-  S: ["Springbok", "Serval", "Snake", "Secretary Bird", "Sable Antelope", "Spotted Hyena", "Sitatunga", "Saddle-Billed Stork", "Sunbird", "Squirrel", "Scorpion", "Starling", "Spider"],
+  S: ["Snake", "Springbok", "Serval", "Secretary Bird", "Sable Antelope", "Spotted Hyena", "Sitatunga", "Saddle-Billed Stork", "Sunbird", "Squirrel", "Scorpion", "Starling", "Spider"],
   T: ["Topi", "Thomson's Gazelle", "Tortoise", "Termite", "Tsetse Fly", "Tawny Eagle", "Tree Hyrax", "Tarantula"],
   W: ["Wildebeest", "Warthog", "Wild Dog", "Waterbuck", "White Rhino", "Water Buffalo", "Weaver Bird", "Wildcat"]
 } },
 { id: "aquarium", prompt: "Something at an aquarium", topic: "nature", answers: {
   A: ["Angelfish", "Anemone", "Axolotl", "Algae", "Aquatic Plants|Aquarium Plants", "Arowana", "Angler Fish", "Aquarium Gravel"],
-  B: ["Betta Fish|Betta", "Barracuda", "Blue Tang", "Butterfly Fish", "Bubbles", "Beluga Whale", "Bat Ray", "Blowfish", "Blacktip Shark", "Barnacle", "Bass", "Blenny"],
+  B: ["Betta Fish|Betta", "Blue Tang", "Butterfly Fish", "Barracuda", "Bubbles", "Beluga Whale", "Bat Ray", "Blowfish", "Blacktip Shark", "Barnacle", "Bass", "Blenny"],
   C: ["Coral", "Clownfish", "Crab", "Catfish", "Clam", "Cleaner Shrimp", "Cuttlefish", "Carp", "Cichlid", "Cownose Ray", "Castle", "Conch", "Crayfish", "Cod"],
   D: ["Dolphin", "Diver", "Discus", "Dory", "Damselfish", "Dogfish"],
   E: ["Eel", "Electric Eel", "Eagle Ray", "Exhibit", "Emperor Penguin", "Emperor Angelfish"],
