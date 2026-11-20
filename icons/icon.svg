@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="30%" r="80%"><stop offset="0" stop-color="#3b1a8c"/><stop offset="1" stop-color="#120a30"/></radialGradient>
+    <linearGradient id="d" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7cb2"/><stop offset=".5" stop-color="#ff3d8b"/><stop offset="1" stop-color="#c4166a"/></linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#ff9d00"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="rotate(-10 256 256)">
+    <rect x="116" y="116" width="280" height="280" rx="64" fill="#8a0f4a" transform="translate(0 18)"/>
+    <rect x="116" y="116" width="280" height="280" rx="64" fill="url(#d)"/>
+    <rect x="128" y="128" width="256" height="256" rx="54" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width="8"/>
+    <text x="256" y="335" text-anchor="middle" font-family="Arial Rounded MT Bold, Arial Black, sans-serif" font-weight="900" font-size="230" fill="url(#g)" stroke="#7a1040" stroke-width="6">R</text>
+  </g>
+</svg>

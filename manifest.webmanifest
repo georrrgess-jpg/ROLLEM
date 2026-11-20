@@ -1,0 +1,16 @@
+{
+  "name": "ROLL'EM",
+  "short_name": "ROLL'EM",
+  "description": "Roll a letter. Beat the clock. Hit the board. A pass-and-play party word game.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#120a30",
+  "theme_color": "#160c38",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

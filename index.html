@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>ROLL'EM</title>
+  <meta name="description" content="ROLL'EM — roll the letter, beat the clock, hit the board. A pass-and-play party word game.">
+  <meta name="theme-color" content="#160c38">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ROLL'EM">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="bg" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <main id="app">
+    <!-- HOME -->
+    <section class="screen" id="home" data-screen>
+      <header class="topbar">
+        <span></span>
+        <button class="icon-btn" id="soundToggle" aria-label="Toggle sound"></button>
+      </header>
+      <div class="home-hero">
+        <div class="hero-die" aria-hidden="true">
+          <div class="mini-cube spin"><i>R</i><i>O</i><i>L</i><i>E</i><i>M</i><i>!</i></div>
+        </div>
+        <h1 class="logo"><span>ROLL</span><span class="apos">'</span><span class="em">EM</span></h1>
+        <p class="tagline">Roll a letter. Beat the clock. Hit the board.</p>
+      </div>
+      <div class="home-actions">
+        <button class="btn btn-primary btn-xl" id="playBtn">Play</button>
+        <button class="btn btn-ghost" id="howBtn">How to play</button>
+      </div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="screen" id="setup" data-screen>
+      <header class="topbar">
+        <button class="icon-btn" data-back="home" aria-label="Back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+        </button>
+        <h2 class="topbar-title">Game setup</h2>
+        <span class="icon-btn-spacer"></span>
+      </header>
+      <div class="scroll">
+        <div class="panel">
+          <div class="panel-head"><h3>Players</h3><span class="muted" id="playerCount"></span></div>
+          <ul class="player-list" id="playerList"></ul>
+          <button class="btn btn-dashed" id="addPlayer">+ Add player</button>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Answer timer</h3></div>
+          <div class="chips" id="timerChips" role="radiogroup" aria-label="Answer timer"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Rounds</h3></div>
+          <div class="chips" id="roundChips" role="radiogroup" aria-label="Rounds"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Final round bonus</h3></div>
+          <div class="chips" id="multChips" role="radiogroup" aria-label="Final round multiplier"></div>
+          <p class="hint">Every point in the last round is multiplied. Nobody's safe.</p>
+        </div>
+      </div>
+      <footer class="bottombar">
+        <p class="error-text" id="setupError" role="alert"></p>
+        <button class="btn btn-primary btn-xl" id="startBtn">Start game</button>
+      </footer>
+    </section>
+
+    <!-- ROLL -->
+    <section class="screen" id="roll" data-screen>
+      <header class="hud">
+        <button class="icon-btn" data-menu aria-label="Menu">
+          <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" /></svg>
+        </button>
+        <div class="hud-round" data-round></div>
+        <div class="hud-score" data-myscore></div>
+      </header>
+      <div class="roll-stage">
+        <div class="turn-tag" id="rollWho"></div>
+        <p class="roll-sub" id="rollSub">Pass the phone, then tap the die</p>
+        <button class="die-wrap" id="dieBtn" aria-label="Roll the die">
+          <div class="die-shadow"></div>
+          <div class="die" id="die">
+            <div class="face f1"></div><div class="face f2"></div><div class="face f3"></div>
+            <div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
+          </div>
+        </button>
+        <p class="tap-hint" id="tapHint">Tap to roll</p>
+      </div>
+    </section>
+
+    <!-- ANSWER -->
+    <section class="screen" id="answer" data-screen>
+      <div class="timer-track" aria-hidden="true"><div class="timer-fill" id="timerFill"></div></div>
+      <header class="hud">
+        <div class="hud-player" id="ansWho"></div>
+        <div class="timer-num" id="timerNum" aria-live="off">20</div>
+        <button class="chip-btn" id="rerollBtn">↻ Reroll</button>
+      </header>
+      <div class="answer-body">
+        <div class="prompt-card" id="promptCard">
+          <div class="letter-tile" id="ansLetter">A</div>
+          <div class="prompt-text">
+            <span class="prompt-label">Name…</span>
+            <span class="prompt-main" id="ansPrompt">A fruit</span>
+          </div>
+        </div>
+        <form class="answer-form" id="answerForm" autocomplete="off">
+          <div class="input-row">
+            <input id="answerInput" type="text" inputmode="text" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="go" maxlength="40" placeholder="Starts with A…" aria-label="Your answer">
+            <button type="button" class="mic-btn" id="micBtn" aria-label="Answer with your voice">
+              <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+            </button>
+          </div>
+          <p class="fix-note" id="fixNote" aria-live="polite"></p>
+          <button type="submit" class="btn btn-primary btn-xl" id="lockBtn">Lock it in</button>
+        </form>
+        <div class="final-badge" id="ansMult" hidden></div>
+      </div>
+    </section>
+
+    <!-- REVEAL -->
+    <section class="screen" id="reveal" data-screen>
+      <header class="hud">
+        <div class="hud-player" id="revWho"></div>
+        <div class="rev-letter" id="revLetter"></div>
+      </header>
+      <div class="scroll reveal-body">
+        <p class="rev-prompt" id="revPrompt"></p>
+        <div class="your-answer" id="yourAnswer"></div>
+        <ol class="board" id="board"></ol>
+        <div class="verdict" id="verdict"></div>
+        <div class="vote" id="vote" hidden>
+          <p class="vote-q" id="voteQ"></p>
+          <div class="vote-btns">
+            <button class="btn btn-no" id="voteNo">Nope</button>
+            <button class="btn btn-yes" id="voteYes">It counts!</button>
+          </div>
+        </div>
+      </div>
+      <footer class="bottombar">
+        <button class="btn btn-primary btn-xl" id="nextBtn" disabled>Next</button>
+      </footer>
+    </section>
+
+    <!-- STANDINGS -->
+    <section class="screen" id="standings" data-screen>
+      <header class="topbar center">
+        <h2 class="topbar-title" id="standTitle">Standings</h2>
+      </header>
+      <div class="scroll">
+        <ol class="standings" id="standList"></ol>
+      </div>
+      <footer class="bottombar">
+        <button class="btn btn-primary btn-xl" id="standNext">Next round</button>
+      </footer>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="screen" id="results" data-screen>
+      <header class="topbar center"><h2 class="topbar-title">Final results</h2></header>
+      <div class="scroll">
+        <div class="winner-line" id="winnerLine"></div>
+        <div class="podium" id="podium"></div>
+        <ol class="standings compact" id="restList"></ol>
+        <div class="awards" id="awards"></div>
+      </div>
+      <footer class="bottombar row">
+        <button class="btn btn-ghost" id="homeBtn">Home</button>
+        <button class="btn btn-primary" id="rematchBtn">Rematch</button>
+      </footer>
+    </section>
+  </main>
+
+  <!-- Overlays -->
+  <div class="overlay" id="splash" hidden>
+    <div class="splash-inner">
+      <div class="splash-kicker" id="splashKicker">Final round</div>
+      <div class="splash-big" id="splashBig">DOUBLE<br>POINTS</div>
+      <div class="splash-sub" id="splashSub">Every answer counts twice. Time for a comeback.</div>
+    </div>
+  </div>
+
+  <div class="overlay modal" id="menuModal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <h3 id="menuTitle">Paused</h3>
+      <button class="btn btn-primary" data-close>Resume</button>
+      <button class="btn btn-ghost" id="menuSound"></button>
+      <button class="btn btn-danger" id="quitBtn">Quit to home</button>
+    </div>
+  </div>
+
+  <div class="overlay modal" id="howModal" hidden>
+    <div class="sheet tall" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+      <h3 id="howTitle">How to play</h3>
+      <div class="sheet-scroll">
+        <ol class="how">
+          <li><b>Roll the die.</b> 23 letters, A to W. Whatever it lands on is your letter.</li>
+          <li><b>Answer the prompt</b> with something that starts with that letter. Type it or tap the mic. The clock is ticking!</li>
+          <li><b>Lock it in.</b> Small typos get fixed for you. Check the fix, then tap Submit.</li>
+          <li><b>Hit the board.</b> We surveyed 100 people. Match a top-5 answer to score its survey number. The #1 answer pays the most.</li>
+          <li><b>Off the board?</b> A valid answer still earns <b>10</b>. If we don't recognise it, the table votes on whether it counts.</li>
+          <li><b>Bonuses.</b> Answer fast for up to +10. Hit the board on back-to-back turns for a streak bonus.</li>
+          <li><b>Reroll.</b> Hate your letter? Every player gets one reroll per game.</li>
+          <li><b>Final round.</b> All points are doubled (or tripled), so anyone can still win.</li>
+        </ol>
+      </div>
+      <button class="btn btn-primary" data-close>Got it</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/data/_init.js"></script>
+  <script src="js/data/food.js"></script>
+  <script src="js/data/nature.js"></script>
+  <script src="js/data/people.js"></script>
+  <script src="js/data/things.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/fx.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
