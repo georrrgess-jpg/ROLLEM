@@ -320,10 +320,9 @@
   const glHero = window.Die3D ? Die3D($('#heroAir'), { maxDpr: LITE ? 1.25 : 2 }) : { ok: false };
   if (glHero.ok) glHero.setFaces(['R', 'O', 'L', 'E', 'M', '!']);
   let spinAnim = null, glowAnim = null;
-  const SPIN_KEYS = [[0, 0], [0.06, -0.012], [0.23, 0.45], [0.42, 0.76], [0.55, 0.87], [0.68, 0.95], [0.84, 0.995], [0.92, 1.004], [1, 1]];
-  function spinProgress(k) {
-    for (let i = 1; i < SPIN_KEYS.length; i++) {
-      const [o1, p1] = SPIN_KEYS[i - 1], [o2, p2] = SPIN_KEYS[i];
+  function spinProgress(k, keys) {
+    for (let i = 1; i < keys.length; i++) {
+      const [o1, p1] = keys[i - 1], [o2, p2] = keys[i];
       if (k <= o2) return p1 + (p2 - p1) * ((k - o1) / (o2 - o1));
     }
     return 1;
@@ -352,7 +351,7 @@
     if (active.id === 'home' && glHero.ok) { glHero.setPose(0.44 + 0.05 * Math.sin(now / 900), now / 1600); glHero.draw(); }
     if (active.id === 'roll' && glRoll.ok) {
       if (spinAnim) {
-        const k = Math.min(1, (now - spinAnim.t0) / spinAnim.D), p = spinProgress(k);
+        const k = Math.min(1, (now - spinAnim.t0) / spinAnim.D), p = spinProgress(k, spinAnim.keys);
         glRoll.setPose(POSE.x + 2 * Math.PI * spinAnim.kx * p, POSE.y + spinAnim.dir * 2 * Math.PI * spinAnim.ky * p);
       } else if (!die.classList.contains('landed')) {
         glRoll.setPose(POSE.x + 0.07 * Math.sin(now / 700), POSE.y + 0.14 * Math.sin(now / 1100));
@@ -398,6 +397,46 @@
   });
   dieBtn.addEventListener('click', () => roll(0.4));
 
+  // ---------- throw styles ----------
+  // path: o = time offset, x = fraction of width, y = fraction of throw height (negative = up),
+  //       k = 'squash' (impact) / 'stretch' (launch). spin: [time, progress] (progress 1 = rolled face forward).
+  const P = (o, x, y, k, s) => ({ o, x, y, k, s });
+  const THROWS = [
+    { id: 'classic', dur: 1, kx: [3, 4], ky: [2, 3],
+      path: [P(0, 0, 0), P(0.06, 0, 0, 'squash', 0.9), P(0.23, 0, -1, 'stretch'), P(0.405, 0, 0), P(0.42, 0, 0, 'squash'), P(0.55, 0, -0.3), P(0.68, 0, 0, 'squash', 0.6), P(0.76, 0, -0.09), P(0.84, 0, 0, 'squash', 0.3), P(1, 0, 0)],
+      spin: [[0, 0], [0.06, -0.012], [0.23, 0.45], [0.42, 0.76], [0.55, 0.87], [0.68, 0.95], [0.84, 0.995], [0.92, 1.004], [1, 1]],
+      hits: [[0.42, 1], [0.68, 0.55], [0.84, 0.3]] },
+    { id: 'moonshot', dur: 1.18, kx: [4, 5], ky: [3, 4], whoosh: 0.28,
+      path: [P(0, 0, 0), P(0.06, 0, 0, 'squash', 1.1), P(0.28, 0, -1.35, 'stretch'), P(0.38, 0, -1.3), P(0.535, 0, 0), P(0.55, 0, 0, 'squash', 1.2), P(0.68, 0, -0.22), P(0.8, 0, 0, 'squash', 0.5), P(0.88, 0, -0.05), P(0.94, 0, 0, 'squash', 0.25), P(1, 0, 0)],
+      spin: [[0, 0], [0.06, -0.012], [0.28, 0.5], [0.38, 0.58], [0.55, 0.86], [0.8, 0.975], [0.94, 1.004], [1, 1]],
+      hits: [[0.55, 1], [0.8, 0.5], [0.94, 0.25]] },
+    { id: 'skid', dur: 1.05, kx: [1, 2], ky: [3, 4],
+      path: [P(0, 0, 0), P(0.05, 0, 0, 'squash', 0.8), P(0.18, -0.12, -0.5, 'stretch'), P(0.31, -0.2, 0), P(0.32, -0.2, 0, 'squash', 0.9), P(0.47, 0.04, -0.14), P(0.6, 0.13, 0, 'squash', 0.5), P(0.84, 0.02, 0), P(0.93, -0.012, 0), P(1, 0, 0)],
+      spin: [[0, 0], [0.18, 0.3], [0.32, 0.6], [0.6, 0.86], [0.84, 0.985], [0.93, 1.006], [1, 1]],
+      hits: [[0.32, 1], [0.6, 0.6], [0.72, 0.15], [0.84, 0.12]] },
+    { id: 'ricochet', dur: 1.12, kx: [3, 4], ky: [2, 3],
+      path: [P(0, 0, 0), P(0.05, 0, 0, 'squash', 0.9), P(0.2, -0.22, -0.85, 'stretch'), P(0.355, -0.3, 0), P(0.37, -0.3, 0, 'squash'), P(0.5, 0.02, -0.5), P(0.635, 0.27, 0), P(0.65, 0.27, 0, 'squash', 0.7), P(0.75, 0.13, -0.16), P(0.85, 0.03, 0, 'squash', 0.35), P(1, 0, 0)],
+      spin: [[0, 0], [0.2, 0.38], [0.37, 0.66], [0.5, 0.78], [0.65, 0.92], [0.85, 0.996], [0.93, 1.004], [1, 1]],
+      hits: [[0.37, 1], [0.65, 0.7], [0.85, 0.35]] },
+    { id: 'spintop', dur: 1.15, kx: [1, 1], ky: [5, 6], whoosh: 0.22,
+      path: [P(0, 0, 0), P(0.06, 0, 0, 'squash', 0.9), P(0.2, 0, -0.62, 'stretch'), P(0.42, 0, -0.68), P(0.62, 0, -0.64), P(0.745, 0, 0), P(0.76, 0, 0, 'squash', 1.4), P(0.85, 0, -0.07), P(0.92, 0, 0, 'squash', 0.3), P(1, 0, 0)],
+      spin: [[0, 0], [0.2, 0.22], [0.62, 0.8], [0.76, 0.97], [0.92, 1.005], [1, 1]],
+      hits: [[0.76, 1.15], [0.92, 0.3]] },
+    { id: 'slowmo', dur: 1.2, kx: [2, 3], ky: [2, 2], whoosh: 0.2,
+      path: [P(0, 0, 0), P(0.06, 0, 0, 'squash', 1), P(0.2, 0, -0.95, 'stretch'), P(0.58, 0.02, -1.02), P(0.695, 0, 0), P(0.71, 0, 0, 'squash', 1.3), P(0.8, 0, -0.12), P(0.9, 0, 0, 'squash', 0.35), P(1, 0, 0)],
+      spin: [[0, 0], [0.2, 0.36], [0.58, 0.56], [0.71, 0.93], [0.9, 1.004], [1, 1]],
+      hits: [[0.71, 1.2], [0.9, 0.35]] }
+  ];
+  let lastThrow = null;
+  function pickThrow() {
+    const forced = window.__rollemThrow && THROWS.find(t => t.id === window.__rollemThrow);
+    if (forced) { lastThrow = forced.id; return forced; }
+    const pool = THROWS.filter(t => t.id !== lastThrow);
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    lastThrow = t.id;
+    return t;
+  }
+
   async function roll(power) {
     if (rolling) return;
     rolling = true;
@@ -409,50 +448,47 @@
     die.classList.remove('idle'); dieAir.classList.remove('bob');
     die.getAnimations().forEach(a => a.cancel());
 
-    // All motion is transform-only (GPU compositor): air = height + squash, die = spin, shadow = scale.
-    const D = LITE ? 1500 : 1750;
+    // Pick a throw style (never the same one twice in a row). Everything is transform-only (GPU compositor).
+    const style = pickThrow();
+    const D = Math.round((LITE ? 1500 : 1750) * style.dur);
     const H = Math.round(Math.min(window.innerHeight * (0.26 + 0.12 * (power || 0)), 380));
-    const L1 = 0.42, L2 = 0.68, L3 = 0.84;
-    const up = 'cubic-bezier(.2,.75,.35,1)', down = 'cubic-bezier(.6,0,.85,.4)';
-    dieAir.animate([
-      { transform: 'translate3d(0,0,0) scale(1,1)' },
-      { transform: 'translate3d(0,10px,0) scale(1.16,.8)', offset: 0.06, easing: up },
-      { transform: `translate3d(0,${-H}px,0) scale(.95,1.07)`, offset: 0.23, easing: down },
-      { transform: 'translate3d(0,0,0) scale(1,1)', offset: L1 - 0.015 },
-      { transform: 'translate3d(0,7px,0) scale(1.17,.83)', offset: L1, easing: up },
-      { transform: `translate3d(0,${-H * 0.3}px,0) scale(.97,1.04)`, offset: 0.55, easing: down },
-      { transform: 'translate3d(0,4px,0) scale(1.1,.9)', offset: L2, easing: up },
-      { transform: `translate3d(0,${-H * 0.09}px,0) scale(1,1)`, offset: 0.76, easing: down },
-      { transform: 'translate3d(0,2px,0) scale(1.05,.95)', offset: L3, easing: up },
-      { transform: 'translate3d(0,0,0) scale(1,1)' }
-    ], { duration: D, fill: 'forwards' });
-    const kx = 3 + (Math.random() < 0.5 ? 0 : 1), ky = 2 + (Math.random() < 0.5 ? 0 : 1), dir = Math.random() < 0.5 ? -1 : 1;
+    const W = Math.min(window.innerWidth, 560);
+    const pts = style.path;
+    const up = 'cubic-bezier(.2,.75,.35,1)', down = 'cubic-bezier(.6,0,.85,.4)', glide = 'cubic-bezier(.45,0,.55,1)';
+    const frames = pts.map((pt, i) => {
+      const nx = pts[i + 1], x = Math.round((pt.x || 0) * W), y = Math.round((pt.y || 0) * H);
+      const sc = pt.k === 'squash' ? `scale(${1 + 0.17 * (pt.s || 1)},${1 - 0.17 * (pt.s || 1)})` : pt.k === 'stretch' ? 'scale(.95,1.07)' : 'scale(1,1)';
+      const f = { transform: `translate3d(${x}px,${pt.k === 'squash' ? Math.round(7 * (pt.s || 1)) : y}px,0) ${sc}`, offset: pt.o };
+      if (nx) f.easing = Math.abs((nx.y || 0) - (pt.y || 0)) < 0.06 ? glide : (nx.y || 0) < (pt.y || 0) ? up : down;
+      return f;
+    });
+    dieAir.animate(frames, { duration: D, fill: 'forwards' });
+    const kx = style.kx[0] + Math.floor(Math.random() * (style.kx[1] - style.kx[0] + 1));
+    const ky = style.ky[0] + Math.floor(Math.random() * (style.ky[1] - style.ky[0] + 1));
+    const dir = Math.random() < 0.5 ? -1 : 1;
     const rot = p => `rotateX(${-20 + 360 * kx * p}deg) rotateY(${-32 + dir * 360 * ky * p}deg)`;
-    spinAnim = { t0: performance.now(), D, kx, ky, dir };
-    const spin = glRoll.ok ? { finished: sleep(D) } : die.animate(
-      [[0, 0], [0.06, -0.012], [0.23, 0.45], [L1, 0.76], [0.55, 0.87], [L2, 0.95], [L3, 0.995], [0.92, 1.004], [1, 1]]
-        .map(([o, p]) => ({ transform: rot(p), offset: o })),
-      { duration: D, fill: 'forwards' });
-    const sh = s => `translateX(-50%) scale(${s})`;
-    dieShadow.animate([
-      { transform: sh(1), opacity: 1 }, { transform: sh(1.12), opacity: 1, offset: 0.06 },
-      { transform: sh(0.3), opacity: 0.3, offset: 0.23 }, { transform: sh(1.12), opacity: 1, offset: L1 },
-      { transform: sh(0.7), opacity: 0.6, offset: 0.55 }, { transform: sh(1.06), opacity: 1, offset: L2 },
-      { transform: sh(0.92), opacity: 0.85, offset: 0.76 }, { transform: sh(1), opacity: 1, offset: L3 }, { transform: sh(1), opacity: 1 }
-    ], { duration: D, fill: 'forwards' });
+    spinAnim = { t0: performance.now(), D, kx, ky, dir, keys: style.spin };
+    const spin = glRoll.ok ? { finished: sleep(D) } : die.animate(style.spin.map(([o, p]) => ({ transform: rot(p), offset: o })), { duration: D, fill: 'forwards' });
+    dieShadow.animate(pts.map(pt => {
+      const h = Math.max(0, -(pt.y || 0)), x = Math.round((pt.x || 0) * W);
+      const sc = pt.k === 'squash' ? 1.12 : Math.max(0.3, 1 - 0.75 * h);
+      return { transform: `translateX(calc(-50% + ${x}px)) scale(${sc.toFixed(2)})`, opacity: Math.max(0.3, 1 - 0.7 * h).toFixed(2), offset: pt.o };
+    }), { duration: D, fill: 'forwards' });
 
-    // sound synced to the bounces
+    // sound synced to this style's bounces
     setTimeout(() => Sound.launch(), D * 0.05);
-    [[L1, 1], [L2, 0.55], [L3, 0.3]].forEach(([o, s], k) => setTimeout(() => {
-      Sound.clack(s);
-      if (k === 0) { const st = $('#roll'); st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake'); }
+    if (style.whoosh) setTimeout(() => Sound.whoosh(), D * style.whoosh);
+    style.hits.forEach(([o, st], k) => setTimeout(() => {
+      Sound.clack(st);
+      if (k === 0) { const sc = $('#roll'); sc.classList.remove('shake'); void sc.offsetWidth; sc.classList.add('shake'); }
     }, D * o));
-    // letters flicker on the faces while airborne (cheap: a few text swaps, not every frame)
+    // letters flicker while airborne; lock the rolled letter on the front face once the spin is nearly done
+    const lockAt = (style.spin.find(([, p]) => p >= 0.93) || [0.7])[0];
     const iv = setInterval(() => { setFaces(faces.map(() => randLetter())); Sound.rattle(); }, LITE ? 150 : 95);
     setTimeout(() => {
       clearInterval(iv);
       setFaces([turn.letter].concat(faces.slice(1).map(() => randLetter())));
-    }, D * L2);
+    }, D * lockAt);
 
     await spin.finished.catch(() => {});
     spinAnim = null;
