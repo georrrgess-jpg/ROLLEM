@@ -46,7 +46,7 @@ js/audio.js           synthesized sound effects, adaptive tension music and hapt
 js/fx.js              confetti and particle canvas
 js/die3d.js           WebGL rounded-cube die (CSS cube fallback)
 js/data/*.js          prompt packs (199 categories)
-js/data/_topics.js    game modes and the topic of each category
+js/topics.js          game modes and the topic of each category
 js/themes.js          12 menu themes and 12 dice designs
 tools/validate-data.js  checks prompt packs
 tools/test-engine.js    engine unit tests and data cross-checks
