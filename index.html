@@ -51,7 +51,7 @@
         <h2 class="topbar-title">Game setup</h2>
         <span class="icon-btn-spacer"></span>
       </header>
-      <div class="scroll">
+      <div class="scroll fade">
         <div class="panel">
           <div class="panel-head"><h3>Players</h3><span class="muted" id="playerCount"></span></div>
           <ul class="player-list" id="playerList"></ul>
@@ -140,16 +140,16 @@
         <p class="rev-prompt" id="revPrompt"></p>
         <div class="your-answer" id="yourAnswer"></div>
         <ol class="board" id="board"></ol>
-        <div class="verdict" id="verdict"></div>
         <div class="vote" id="vote" hidden>
           <p class="vote-q" id="voteQ"></p>
           <div class="vote-btns">
-            <button class="btn btn-no" id="voteNo">Nope</button>
-            <button class="btn btn-yes" id="voteYes">It counts!</button>
+            <button class="btn btn-no" id="voteNo">No</button>
+            <button class="btn btn-yes" id="voteYes">Yes, it counts</button>
           </div>
         </div>
       </div>
       <footer class="bottombar">
+        <div class="verdict" id="verdict" aria-live="polite"></div>
         <button class="btn btn-primary btn-xl" id="nextBtn" disabled>Next</button>
       </footer>
     </section>
@@ -210,9 +210,9 @@
           <li><b>Answer the prompt</b> with something that starts with that letter. Type it or tap the mic. The clock is ticking!</li>
           <li><b>Lock it in.</b> Small typos get fixed for you. Check the fix, then tap Submit.</li>
           <li><b>Hit the board.</b> We surveyed 100 people. Match a top-5 answer to score its survey number. The #1 answer pays the most.</li>
-          <li><b>Off the board?</b> A valid answer still earns <b>10</b>. If we don't recognise it, the table votes on whether it counts.</li>
-          <li><b>Bonuses.</b> Answer fast for up to +10. Hit the board on back-to-back turns for a streak bonus.</li>
-          <li><b>Reroll.</b> Hate your letter? Every player gets one reroll per game.</li>
+          <li><b>Off the board?</b> A valid answer still earns <b>5</b>. If we don't recognise it, the next player judges whether it counts.</li>
+          <li><b>Bonuses.</b> Hit the board fast for up to +10. Hit it on back-to-back turns for a streak bonus.</li>
+          <li><b>Reroll.</b> Hate your letter? Every player gets one reroll per game, but the clock keeps running.</li>
           <li><b>Final round.</b> All points are doubled (or tripled), so anyone can still win.</li>
         </ol>
       </div>

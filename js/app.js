@@ -101,7 +101,7 @@
     list.innerHTML = setupNames.map((n, i) => `
       <li class="player-row" style="animation-delay:${focusLast ? 0 : i * 40}ms">
         <span class="avatar" style="--c:${COLORS[i % COLORS.length]}">${esc((n.trim()[0] || String(i + 1)).toUpperCase())}</span>
-        <input type="text" maxlength="14" value="${esc(n)}" placeholder="Player ${i + 1}" data-i="${i}" aria-label="Player ${i + 1} name" enterkeyhint="next" autocapitalize="words" autocomplete="off">
+        <input type="text" maxlength="12" value="${esc(n)}" placeholder="Player ${i + 1}" data-i="${i}" aria-label="Player ${i + 1} name" enterkeyhint="next" autocapitalize="words" autocomplete="off">
         <button class="row-x" data-x="${i}" aria-label="Remove player ${i + 1}" ${setupNames.length <= 2 ? 'disabled' : ''}>
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
@@ -149,7 +149,7 @@
   // ---------- GAME FLOW ----------
   function newGame(names) {
     G.players = names.map((name, i) => ({ name, color: COLORS[i % COLORS.length], score: 0, rerolls: 1, streak: 0, hits: 0, tops: 0 }));
-    G.round = 1; G.used = new Set(); G.log = [];
+    G.round = 1; G.used = new Set(); G.log = []; G.salt = Math.floor(Math.random() * 1e9);
     document.body.classList.remove('final-mode');
     startRound();
   }
@@ -190,7 +190,7 @@
     const p = current();
     $('#rollWho').innerHTML = `${avatar(p, 'lg')}<div class="name"><em>${esc(p.name)}</em>'s turn</div>`;
     $('#rollWho').style.animation = 'none'; void $('#rollWho').offsetWidth; $('#rollWho').style.animation = '';
-    $('#rollSub').textContent = G.players.length > 1 ? 'Pass the phone, then tap the die' : 'Tap the die to roll';
+    $('#rollSub').textContent = p.streak >= 1 ? `🔥 ${p.streak} board hit${p.streak > 1 ? 's' : ''} in a row. Keep it going!` : 'Pass the phone, then tap the die';
     hud($('#roll'));
     resetDie();
     show('roll');
@@ -210,7 +210,7 @@
   async function roll() {
     if (rolling) return;
     rolling = true;
-    const turn = E.pickTurn(bank, G.used);
+    const turn = E.pickTurn(bank, G.used, null, G.salt);
     G.turn = turn;
     G.used.add(turn.cat.id + ':' + turn.letter); G.used.add(turn.cat.id);
     $('#tapHint').classList.add('hide');
@@ -278,7 +278,8 @@
     if (mult() > 1) { mb.hidden = false; mb.textContent = `Final round · ${mult()}× points`; } else mb.hidden = true;
     show('answer');
     Sound.whoosh();
-    startTimer(settings.timer);
+    startTimer(settings.timer, G.carry);
+    G.carry = null;
     setTimeout(() => { if (active && active.id === 'answer') input.focus({ preventScroll: true }); }, 380);
   }
 
@@ -332,27 +333,29 @@
     const p = current();
     if (p.rerolls < 1 || !G.timer) return;
     p.rerolls--;
+    G.carry = Math.max(5000, G.timer.left);
     stopTimer(); stopMic();
     input.blur();
     Sound.select();
     resetDie();
     show('roll');
-    $('#rollSub').textContent = 'Reroll! Fresh letter coming up…';
+    $('#rollSub').textContent = 'Reroll! The clock keeps your remaining time…';
     setTimeout(roll, 450);
   });
 
   // ---------- timer ----------
-  function startTimer(secs) {
+  function startTimer(secs, startMs) {
     stopTimer();
     const fill = $('#timerFill'), num = $('#timerNum');
-    const T = { total: secs * 1000, left: secs * 1000, last: performance.now(), raf: 0, paused: false, lastSec: secs };
+    const left = startMs ? Math.min(startMs, secs * 1000) : secs * 1000;
+    const T = { total: secs * 1000, left, last: performance.now(), raf: 0, lastSec: Math.ceil(left / 1000) };
     G.timer = T;
     fill.classList.remove('low'); num.classList.remove('low');
-    num.textContent = secs;
-    fill.style.transform = 'scaleX(1)';
+    num.textContent = T.lastSec;
+    fill.style.transform = `scaleX(${left / T.total})`;
     function frame(now) {
       if (G.timer !== T) return;
-      if (!T.paused) {
+      if (!pauses.size) {
         T.left -= now - T.last;
         const sec = Math.max(0, Math.ceil(T.left / 1000));
         if (sec !== T.lastSec) {
@@ -369,11 +372,14 @@
     T.raf = requestAnimationFrame(frame);
   }
   function stopTimer() { if (G.timer) cancelAnimationFrame(G.timer.raf); G.timer = null; }
-  function pauseTimer() { if (G.timer) G.timer.paused = true; }
-  function resumeTimer() { if (G.timer) { G.timer.paused = false; G.timer.last = performance.now(); } }
+  const pauses = new Set();
+  function pauseTimer(why) { pauses.add(why || 'menu'); }
+  function resumeTimer(why) { pauses.delete(why || 'menu'); if (G.timer && !pauses.size) G.timer.last = performance.now(); }
   function timeUp() {
     Sound.timeup();
-    const val = input.value.trim();
+    let val = input.value.trim();
+    const fix = val && G.turn && E.suggest(G.turn.entries, val);
+    if (fix) val = fix;
     submitAnswer(val, true);
   }
 
@@ -465,6 +471,7 @@
     ya.innerHTML = `<small>${esc(p.name)} said</small>${val ? esc(val) : (v.timeout ? 'Out of time!' : 'No answer')}`;
     $('#board').innerHTML = t.entries.slice(0, 5).map((e, i) => slotHTML(e, t.counts[i], i)).join('');
     $('#verdict').innerHTML = '';
+    scr.classList.remove('voting');
     $('#vote').hidden = true;
     const next = $('#nextBtn'); next.disabled = true; next.textContent = 'Next';
     show('reveal');
@@ -484,7 +491,8 @@
       FX.at(ya, 30, { speed: 7, colors: ['#2fe3c0', '#ffffff', '#4da3ff'] });
     } else if (v.kind === 'vote') {
       const vq = $('#voteQ');
-      vq.innerHTML = `We don't have <b>“${esc(val)}”</b> on our list. Does it count as <b>${esc(t.cat.prompt.toLowerCase())}</b> starting with <b>${t.letter}</b>?<br><span class="muted">Everyone else decides!</span>`;
+      const judge = G.players.length > 1 ? G.players[G.order[(G.turnPos + 1) % G.order.length]] : null;
+      vq.innerHTML = `${judge ? `${avatar(judge, 'sm')}<br>Pass the phone to <b>${esc(judge.name)}</b>.<br>` : ''}Does <b>“${esc(val)}”</b> count as <b>${esc(t.cat.prompt.toLowerCase())}</b> starting with <b>${t.letter}</b>?<br><span class="muted">It's not on our list. Ask the table, then ${judge ? esc(judge.name) + ' taps' : 'tap'} the verdict.</span>`;
       $('#vote').hidden = false;
       scr.classList.add('voting');
       setTimeout(() => $('#vote').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
@@ -521,7 +529,7 @@
     else { title = v.timeout ? "TIME'S UP!" : 'NO ANSWER'; cls = 'bad'; }
     const chips = [];
     if (sc.total) {
-      chips.push(v.kind === 'board' ? `Survey ${sc.base}` : `Answer ${sc.base}`);
+      chips.push(v.kind === 'board' ? `Survey ${sc.base}` : `Off-board ${sc.base}`);
       if (sc.speed) chips.push(`Speed +${sc.speed}`);
       if (sc.streak) chips.push(`🔥 Streak +${sc.streak}`);
       if (sc.multiplier > 1) chips.push(`×${sc.multiplier} Final`);
@@ -530,7 +538,6 @@
       <div class="v-pts">+<span id="ptsNum">0</span></div>
       ${chips.length ? `<div class="v-break">${chips.map(c => `<span>${c}</span>`).join('')}</div>` : ''}`;
     countUp($('#ptsNum'), 0, sc.total, 700);
-    $('#verdict').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     // reveal the rest of the board
     await sleep(good ? 700 : 500);
@@ -575,12 +582,14 @@
     $('#standTitle').textContent = `After round ${G.round}`;
     $('#standNext').textContent = nextFinal ? `Final round · ${settings.mult}×` : `Round ${G.round + 1}`;
     const list = $('#standList');
+    const rankOf = sc => 1 + now.filter(x => x.p.score > sc).length;
     list.innerHTML = now.map(({ p, i }, r) => {
       const d = p.score - G.roundStart[i];
-      const sub = p.streak >= 2 ? `🔥 ${p.streak} in a row` : r > 0 ? `${now[0].p.score - p.score} behind` : 'In the lead';
-      return `<li class="stand-row ${r === 0 ? 'first' : ''}" data-i="${i}">
-        <span class="stand-rank">${r + 1}</span>${avatar(p)}
-        <span class="stand-name">${esc(p.name)}${r === 0 ? '<span class="crown" aria-hidden="true">👑</span>' : ''}<small>${sub}</small></span>
+      const rk = rankOf(p.score), lead = rk === 1, tiedLead = lead && now.filter(x => x.p.score === p.score).length > 1;
+      const sub = p.streak >= 2 ? `🔥 ${p.streak} in a row` : !lead ? `${now[0].p.score - p.score} behind` : tiedLead ? 'Tied for the lead' : 'In the lead';
+      return `<li class="stand-row ${lead ? 'first' : ''}" data-i="${i}">
+        <span class="stand-rank">${rk}</span>${avatar(p)}
+        <span class="stand-name">${esc(p.name)}${lead ? '<span class="crown" aria-hidden="true">👑</span>' : ''}<small>${sub}</small></span>
         <span class="stand-right"><span class="stand-score" data-from="${G.roundStart[i]}" data-to="${p.score}">${G.roundStart[i]}</span>
         <span class="stand-delta ${d ? '' : 'zero'}">+${d}</span></span>
       </li>`;
@@ -606,8 +615,11 @@
     stopTimer();
     const r = ranked();
     const top = r[0].p.score;
-    const tied = r.filter(x => x.p.score === top && x.p.hits === r[0].p.hits);
-    $('#winnerLine').innerHTML = tied.length > 1 ? `It's a <em>tie!</em>` : `<em>${esc(r[0].p.name)}</em> wins!`;
+    const tiedTop = r.filter(x => x.p.score === top);
+    const tied = tiedTop.filter(x => x.p.hits === r[0].p.hits);
+    if (tied.length > 1) $('#winnerLine').innerHTML = `It's a <em>tie!</em><small>${tied.map(x => esc(x.p.name)).join(' & ')} share the win</small>`;
+    else if (tiedTop.length > 1) $('#winnerLine').innerHTML = `<em>${esc(r[0].p.name)}</em> wins!<small>Tied on ${top}, won on board hits (${r[0].p.hits})</small>`;
+    else $('#winnerLine').innerHTML = `<em>${esc(r[0].p.name)}</em> wins!`;
     const podiumOrder = [1, 0, 2];
     $('#podium').innerHTML = podiumOrder.map(k => {
       const x = r[k];
@@ -633,26 +645,20 @@
     document.body.classList.remove('final-mode');
     show('results');
     Sound.fanfare();
-    setTimeout(() => FX.rain(160), 300);
+    setTimeout(() => FX.rain(110), 300);
     setTimeout(() => { const p1 = $('.pod.p1 .avatar'); if (p1) FX.at(p1, 90, { speed: 12 }); }, 1300);
   }
   $('#rematchBtn').addEventListener('click', () => { Sound.select(); FX.clear(); newGame(G.players.map(p => p.name)); });
   $('#homeBtn').addEventListener('click', () => { Sound.tap(); FX.clear(); show('home'); });
 
   // ---------- menu ----------
-  $$('[data-menu]').forEach(b => b.addEventListener('click', () => { Sound.tap(); openModal('#menuModal'); }));
+  $$('[data-menu]').forEach(b => b.addEventListener('click', () => { Sound.tap(); pauseTimer('menu'); openModal('#menuModal'); }));
   $('#quitBtn').addEventListener('click', () => {
-    Sound.tap(); closeModal('#menuModal'); stopTimer(); stopMic(); FX.clear();
+    Sound.tap(); closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear();
     document.body.classList.remove('final-mode'); show('home');
   });
   // pause the clock if the app is backgrounded mid-answer
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pauseTimer();
-    else if ($('#menuModal').hidden) resumeTimer();
-  });
-  // menu also reachable on answer screen via long-press? keep simple: pause when menu open
-  const mo = new MutationObserver(() => { if (!$('#menuModal').hidden) pauseTimer(); });
-  mo.observe($('#menuModal'), { attributes: true, attributeFilter: ['hidden'] });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pauseTimer('hidden'); else resumeTimer('hidden'); });
 
   // ---------- boot ----------
   renderSound();

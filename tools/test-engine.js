@@ -28,12 +28,14 @@ ok(E.judge(entries, 'A', '  ').kind === 'blank', 'blank');
 const counts = [40, 25, 15, 9, 5];
 let s = E.score({ kind: 'board', rank: 0, counts, timeLeft: 10, timeTotal: 20, multiplier: 1, streak: 1 });
 ok(s.total === 45, 'board #1 + half speed = 45, got ' + s.total);
+for (let i = 0; i < 300; i++) { const c = E.surveyCounts('x' + i, 'B', i); const low = E.score({ kind: 'board', rank: 4, counts: c, timeLeft: 0, timeTotal: 20, multiplier: 1, streak: 0 }).total;
+  const off = E.score({ kind: 'valid', counts: c, timeLeft: 20, timeTotal: 20, multiplier: 1, streak: 0 }).total; ok(low > off, 'board #5 beats off-board'); }
 s = E.score({ kind: 'board', rank: 4, counts, timeLeft: 0, timeTotal: 20, multiplier: 2, streak: 3 });
 ok(s.total === (5 + 0 + 10) * 2, 'final x2 with streak, got ' + s.total);
 s = E.score({ kind: 'vote', accepted: false, counts, timeLeft: 20, timeTotal: 20, multiplier: 1, streak: 0 });
 ok(s.total === 0, 'rejected vote 0');
 s = E.score({ kind: 'valid', counts, timeLeft: 20, timeTotal: 20, multiplier: 1, streak: 0 });
-ok(s.total === 20, 'valid 10 + speed 10');
+ok(s.total === 5, 'valid off-board = 5 flat, got ' + s.total);
 const sc = E.surveyCounts('fruit', 'A');
 ok(sc.every((v, i) => i === 0 || v < sc[i - 1]) && sc.reduce((a, b) => a + b) <= 100, 'survey counts descending and <= 100');
 

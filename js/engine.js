@@ -81,9 +81,9 @@
     return { cats, byLetter, dieLetters };
   }
 
-  function surveyCounts(catId, letter) {
-    const r = rng(hash(catId + ':' + letter));
-    const ranges = [[30, 44], [18, 27], [11, 17], [7, 10], [3, 6]];
+  function surveyCounts(catId, letter, salt) {
+    const r = rng(hash(catId + ':' + letter + ':' + (salt || 0)));
+    const ranges = [[32, 44], [20, 28], [13, 18], [9, 12], [6, 8]];
     return ranges.map(([lo, hi]) => lo + Math.floor(r() * (hi - lo + 1)));
   }
 
@@ -127,7 +127,7 @@
   }
 
   // ---------- scoring ----------
-  const OFF_BOARD_POINTS = 10;
+  const OFF_BOARD_POINTS = 5; // always below the lowest board slot (6+)
   const SPEED_BONUS_MAX = 10;
   function score(opts) {
     // opts: { kind, rank, counts, timeLeft, timeTotal, multiplier, streak, accepted }
@@ -135,22 +135,30 @@
     if (opts.kind === 'board') base = opts.counts[opts.rank];
     else if (opts.kind === 'valid' || (opts.kind === 'vote' && opts.accepted)) base = OFF_BOARD_POINTS;
     if (!base) return { base: 0, speed: 0, streak: 0, multiplier: opts.multiplier, total: 0 };
-    const speed = Math.round(SPEED_BONUS_MAX * Math.max(0, Math.min(1, opts.timeLeft / opts.timeTotal)));
+    // speed bonus only for board hits, so an off-board answer can never outscore a board answer
+    const speed = opts.kind === 'board' ? Math.round(SPEED_BONUS_MAX * Math.max(0, Math.min(1, opts.timeLeft / opts.timeTotal))) : 0;
     const streak = opts.kind === 'board' && opts.streak >= 2 ? Math.min(15, (opts.streak - 1) * 5) : 0;
     const total = (base + speed + streak) * opts.multiplier;
     return { base, speed, streak, multiplier: opts.multiplier, total };
   }
 
   // ---------- turn generation ----------
-  function pickTurn(bank, usedCatIds, rand) {
+  // Letters with few prompts (Q, U...) come up less often; weight = prompt count, capped.
+  function rollLetter(bank, rand) {
+    const w = bank.dieLetters.map(l => Math.min(30, bank.byLetter[l].length));
+    let x = rand() * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return bank.dieLetters[i]; }
+    return bank.dieLetters[bank.dieLetters.length - 1];
+  }
+  function pickTurn(bank, usedCatIds, rand, salt) {
     rand = rand || Math.random;
-    const letter = bank.dieLetters[Math.floor(rand() * bank.dieLetters.length)];
+    const letter = rollLetter(bank, rand);
     const options = bank.byLetter[letter];
     let fresh = options.filter(c => !usedCatIds.has(c.id + ':' + letter) && !usedCatIds.has(c.id));
     if (!fresh.length) fresh = options.filter(c => !usedCatIds.has(c.id + ':' + letter));
     if (!fresh.length) fresh = options;
     const cat = fresh[Math.floor(rand() * fresh.length)];
-    return { letter, cat, entries: cat.letters[letter], counts: surveyCounts(cat.id, letter) };
+    return { letter, cat, entries: cat.letters[letter], counts: surveyCounts(cat.id, letter, salt) };
   }
 
   const api = { LETTERS, norm, key, dist, buildBank, surveyCounts, findEntry, suggest, judge, score, pickTurn, startsWithLetter, OFF_BOARD_POINTS };

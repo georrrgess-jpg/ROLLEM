@@ -13,14 +13,14 @@ ROLL'EM is a pass-and-play party word game for 2–12 players on one phone. It m
 ## Scoring
 | Result | Points |
 |---|---|
-| Matches a top-5 board answer | Its survey number (roughly 3–44) |
-| Valid answer that isn't on the board | 10 |
-| Unknown answer the table votes to accept | 10 |
-| Speed bonus | up to +10 for answering fast |
+| Matches a top-5 board answer | Its survey number (6–44) |
+| Valid answer that isn't on the board | 5 |
+| Unknown answer the next player accepts | 5 |
+| Speed bonus (board hits only) | up to +10 for answering fast |
 | Streak bonus | +5 / +10 / +15 for consecutive board hits |
 | Final round | everything ×2 (or ×3) |
 
-Each player gets one **reroll** per game. The starting player rotates every round.
+Each player gets one **reroll** per game, but the clock keeps running. Letters with fewer prompts (like Q) come up less often. The starting player rotates every round.
 
 ## Play it
 It's a static web app with no build step and no server code.

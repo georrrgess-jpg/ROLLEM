@@ -1,5 +1,5 @@
 /* ROLL'EM service worker: offline play after first visit */
-const CACHE = 'rollem-v1';
+const CACHE = 'rollem-v2';
 const ASSETS = ['./', 'index.html', 'css/style.css', 'js/data/_init.js', 'js/data/food.js', 'js/data/nature.js', 'js/data/people.js', 'js/data/things.js',
   'js/engine.js', 'js/audio.js', 'js/fx.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
