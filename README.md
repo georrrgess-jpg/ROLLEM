@@ -14,7 +14,7 @@ ROLL'EM is a pass-and-play party word game for 2–12 players on one phone. It m
 **Unlimited** mixes every category. There are also topic modes: Food & Drink, Animals & Nature, People & Places, Pop Culture, Home & Everyday, Life & Occasions, Describe It, and **After Dark** (PG-13: bars, dating, bad habits). Unlimited can be set to PG-13 (includes After Dark) or Family.
 
 ## Customize
-Choose from 12 menu themes and 12 dice designs (Classic, Ruby, Onyx, Gold, Sapphire, Mint, Bubblegum, Marble, Wood, Neon, Galaxy, Lava). Your choices are saved on the device.
+Choose from 12 menu themes and 13 dice designs (Classic, Ruby, Onyx, Gold, Sapphire, Mint, Bubblegum, Marble, Wood, Neon, Galaxy, Lava, Lakers). Each player can also pick their own dice from the dice button on their row in setup; it's used on their turns.
 
 ## Scoring
 | Result | Points |

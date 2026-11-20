@@ -29,7 +29,8 @@
     D('wood', 'Wood', [0.8, 0.54, 0.31], [0.22, 0.1, 0.03], { base2: [0.55, 0.32, 0.15], pat: 2, spec: 0.2, shin: 20 }),
     D('neon', 'Neon', [0.06, 0.05, 0.12], [0.2, 1, 0.95], { glow: 0.9, spec: 0.5, shin: 80 }),
     D('galaxy', 'Galaxy', [0.08, 0.05, 0.25], [1, 1, 1], { base2: [0.38, 0.1, 0.48], pat: 3, spec: 0.6, shin: 70 }),
-    D('lava', 'Lava', [0.16, 0.05, 0.03], [1, 0.45, 0.1], { glow: 0.8, spec: 0.5, shin: 60 })
+    D('lava', 'Lava', [0.16, 0.05, 0.03], [1, 0.45, 0.1], { glow: 0.8, spec: 0.5, shin: 60 }),
+    D('lakers', 'Lakers', [0.333, 0.145, 0.514], [0.992, 0.725, 0.153], { base2: [0.992, 0.725, 0.153], ink2: [0.333, 0.145, 0.514], pat: 4, spec: 0.8, shin: 70 })
   ];
   const hex = c => '#' + c.map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
 

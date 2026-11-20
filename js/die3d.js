@@ -81,9 +81,9 @@
   const VS = `
 attribute vec3 aPos; attribute vec3 aNrm; attribute vec2 aUv; attribute float aFace; attribute float aFlat;
 uniform mat3 uRot; uniform float uF, uAspect, uDist; uniform float uL[6];
-varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront; varying vec3 vObj;
+varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront; varying vec3 vObj; varying float vFace;
 void main() {
-  vObj = aPos;
+  vObj = aPos; vFace = aFace;
   vec3 p = uRot * aPos;
   vN = uRot * aNrm;
   int fi = int(aFace + 0.5);
@@ -97,15 +97,17 @@ void main() {
   const FS = `
 precision mediump float;
 uniform sampler2D uTex; uniform float uGlow;
-uniform vec3 uBase, uBase2, uInk; uniform float uSpec, uShin, uPat, uInkGlow, uMetal;
-varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront; varying vec3 vObj;
+uniform vec3 uBase, uBase2, uInk, uInk2; uniform float uSpec, uShin, uPat, uInkGlow, uMetal;
+varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront; varying vec3 vObj; varying float vFace;
 float glyph(vec2 uv) {
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
   return texture2D(uTex, (vCell + vec2(uv.x, 1.0 - uv.y)) / 6.0).a;
 }
 float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+float altFace() { return mod(floor(vFace + 0.5), 2.0); }   // 0 on faces 0,2,4 ; 1 on faces 1,3,5
 vec3 surface(vec3 p) {
   if (uPat < 0.5) return uBase;
+  if (uPat > 3.5) return altFace() > 0.5 ? uBase2 : uBase;     // two-tone team colors
   if (uPat < 1.5) {               // marble veins
     float n = sin(p.x * 3.6 + sin(p.y * 2.9 + sin(p.z * 2.3) * 1.7) * 2.4 + p.z * 1.4);
     return mix(uBase, uBase2, smoothstep(0.78, 1.0, abs(n)) * 0.8);
@@ -127,7 +129,8 @@ void main() {
   float aT = glyph(vUv + vec2(-0.012, 0.016)) * onFace;
   float aB = glyph(vUv + vec2(0.012, -0.016)) * onFace;
   float glow = uGlow * vFront;
-  vec3 ink = mix(uInk, vec3(1.0, 0.62, 0.05), glow);
+  vec3 inkBase = (uPat > 3.5 && altFace() > 0.5) ? uInk2 : uInk;
+  vec3 ink = mix(inkBase, vec3(1.0, 0.62, 0.05), glow);
   vec3 base = mix(surface(vObj), ink, a);
   base *= 1.0 - 0.45 * a * (1.0 - aT);
   base += vec3(0.22) * a * (1.0 - aB);
@@ -179,7 +182,7 @@ void main() {
       buf(MESH.pos, 'aPos', 3); buf(MESH.nrm, 'aNrm', 3); buf(MESH.uv, 'aUv', 2); buf(MESH.face, 'aFace', 1); buf(MESH.flat, 'aFlat', 1);
       const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, MESH.idx, gl.STATIC_DRAW);
       count = MESH.idx.length;
-      ['uRot', 'uF', 'uAspect', 'uDist', 'uL', 'uTex', 'uGlow', 'uBase', 'uBase2', 'uInk', 'uSpec', 'uShin', 'uPat', 'uInkGlow', 'uMetal'].forEach(n => (loc[n] = gl.getUniformLocation(prog, n)));
+      ['uRot', 'uF', 'uAspect', 'uDist', 'uL', 'uTex', 'uGlow', 'uBase', 'uBase2', 'uInk', 'uInk2', 'uSpec', 'uShin', 'uPat', 'uInkGlow', 'uMetal'].forEach(n => (loc[n] = gl.getUniformLocation(prog, n)));
       tex = gl.createTexture();
       gl.enable(gl.DEPTH_TEST);
       gl.clearColor(0, 0, 0, 0);
@@ -231,7 +234,7 @@ void main() {
         gl.uniform1f(loc.uGlow, st.glow);
         gl.uniform1i(loc.uTex, 0);
         const d = st.design || DEFAULT_DESIGN;
-        gl.uniform3fv(loc.uBase, d.base); gl.uniform3fv(loc.uBase2, d.base2 || d.base); gl.uniform3fv(loc.uInk, d.ink);
+        gl.uniform3fv(loc.uBase, d.base); gl.uniform3fv(loc.uBase2, d.base2 || d.base); gl.uniform3fv(loc.uInk, d.ink); gl.uniform3fv(loc.uInk2, d.ink2 || d.ink);
         gl.uniform1f(loc.uSpec, d.spec == null ? 0.6 : d.spec); gl.uniform1f(loc.uShin, d.shin || 56);
         gl.uniform1f(loc.uPat, d.pat || 0); gl.uniform1f(loc.uInkGlow, d.glow || 0); gl.uniform1f(loc.uMetal, d.metal || 0);
         gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);

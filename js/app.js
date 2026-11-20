@@ -57,6 +57,17 @@
   })();
   let setupNames = store.get('players', ['', '']);
   if (!Array.isArray(setupNames) || setupNames.length < 2) setupNames = ['', ''];
+  let setupDice = store.get('playerDice', []);
+  if (!Array.isArray(setupDice)) setupDice = [];
+  const diceOf = i => setupDice[i] || settings.dice;
+  const L = () => window.RollemLooks;
+  const diceChip = id => {
+    const d = (L().DICE.find(x => x.id === id) || L().DICE[0]);
+    const bg = d.pat === 4 ? `linear-gradient(145deg, ${L().hex(d.base.map(v => Math.min(1, v * 1.3)))}, ${L().hex(d.base)})`
+      : `linear-gradient(145deg, ${L().hex(d.base.map(v => Math.min(1, v * 1.15)))}, ${L().hex(d.base2 || d.base)})`;
+    const rim = d.pat === 4 ? `;box-shadow:inset 0 0 0 3px ${L().hex(d.base2)}, 0 4px 10px rgba(0,0,0,.3)` : '';
+    return `<span class="die-chip" style="background:${bg};color:${L().hex(d.ink)}${rim}">A</span>`;
+  };
 
   // ---------- game state ----------
   const G = {
@@ -71,6 +82,7 @@
   let active = null;
   function show(id) {
     const next = document.getElementById(id);
+    if ((id === 'home' || id === 'custom') && window.RollemLooks && typeof settings !== 'undefined') RollemLooks.applyDice(settings.dice);
     if (active === next) return;
     if (active) {
       const prev = active;
@@ -142,7 +154,7 @@
     const L = window.RollemLooks; if (!L) return;
     if (!glCustom && window.Die3D) { glCustom = Die3D($('#customAir'), { maxDpr: LITE ? 1.25 : 2 }); if (glCustom.ok) glCustom.setFaces(['A', 'B', 'C', 'R', 'E', 'M']); }
     $('#diceGrid').innerHTML = L.DICE.map(d => `<button class="swatch" role="radio" aria-checked="${d.id === settings.dice}" data-dice="${d.id}">
-      <span class="die-chip" style="background:linear-gradient(145deg, ${L.hex(d.base.map(v => Math.min(1, v * 1.15)))}, ${L.hex(d.base2 || d.base)});color:${L.hex(d.ink)}">A</span><span>${d.name}</span></button>`).join('');
+      ${diceChip(d.id)}<span>${d.name}</span></button>`).join('');
     $('#themeGrid').innerHTML = L.THEMES.map(t => `<button class="swatch" role="radio" aria-checked="${t.id === settings.theme}" data-theme="${t.id}">
       <span class="theme-chip" style="background:radial-gradient(70% 90% at 25% 20%, rgba(${t.o1}), transparent 70%), radial-gradient(70% 90% at 85% 90%, rgba(${t.o2}), transparent 70%), linear-gradient(180deg, ${t.hi}, ${t.bg0})"></span><span>${t.name}</span></button>`).join('');
     $('#diceName').textContent = (L.DICE.find(d => d.id === settings.dice) || L.DICE[0]).name;
@@ -189,6 +201,7 @@
       <li class="player-row" style="animation-delay:${focusLast ? 0 : i * 40}ms">
         <span class="avatar" style="--c:${COLORS[i % COLORS.length]}">${esc((n.trim()[0] || String(i + 1)).toUpperCase())}</span>
         <input type="text" maxlength="12" value="${esc(n)}" placeholder="Player ${i + 1}" data-i="${i}" aria-label="Player ${i + 1} name" enterkeyhint="next" autocapitalize="words" autocomplete="off">
+        <button class="pdie" data-pdie="${i}" aria-label="Choose dice for player ${i + 1}">${window.RollemLooks ? diceChip(diceOf(i)) : ''}</button>
         <button class="row-x" data-x="${i}" aria-label="Remove player ${i + 1}" ${setupNames.length <= 2 ? 'disabled' : ''}>
           <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
@@ -212,7 +225,21 @@
   });
   $('#playerList').addEventListener('click', e => {
     const b = e.target.closest('[data-x]'); if (!b || setupNames.length <= 2) return;
-    Sound.tap(); setupNames.splice(Number(b.dataset.x), 1); store.set('players', setupNames); renderPlayers();
+    Sound.tap(); setupNames.splice(Number(b.dataset.x), 1); setupDice.splice(Number(b.dataset.x), 1); store.set('players', setupNames); store.set('playerDice', setupDice); renderPlayers();
+  });
+  let pickFor = -1;
+  $('#playerList').addEventListener('click', e => {
+    const b = e.target.closest('[data-pdie]'); if (!b || !window.RollemLooks) return;
+    pickFor = Number(b.dataset.pdie);
+    const name = (setupNames[pickFor] || '').trim() || `Player ${pickFor + 1}`;
+    $('#diceTitle').textContent = `${name}'s dice`;
+    $('#dicePickGrid').innerHTML = L().DICE.map(d => `<button class="swatch" role="radio" aria-checked="${d.id === diceOf(pickFor)}" data-pick="${d.id}">${diceChip(d.id)}<span>${d.name}</span></button>`).join('');
+    Sound.tap(); openModal('#diceModal');
+  });
+  $('#dicePickGrid').addEventListener('click', e => {
+    const b = e.target.closest('[data-pick]'); if (!b || pickFor < 0) return;
+    setupDice[pickFor] = b.dataset.pick; store.set('playerDice', setupDice);
+    Sound.select(); closeModal('#diceModal'); renderPlayers();
   });
   $('#addPlayer').addEventListener('click', () => {
     if (setupNames.length >= MAX_PLAYERS) return;
@@ -241,14 +268,14 @@
     const lower = names.map(n => n.toLowerCase());
     if (lower.some((n, i) => lower.indexOf(n) !== i)) { $('#setupError').textContent = 'Every player needs a different name.'; Sound.buzz(); return; }
     Sound.select();
-    newGame(names);
+    newGame(names, names.map((_, i) => diceOf(i)));
   });
 
   // ---------- GAME FLOW ----------
-  function newGame(names) {
+  function newGame(names, dice) {
     const pool = catsForMode(settings.mode, settings.rating);
     bank = E.buildBank(pool.length ? pool : window.ROLLEM_DATA, { minPerLetter: settings.mode === 'all' ? 1 : 2 });
-    G.players = names.map((name, i) => ({ name, color: COLORS[i % COLORS.length], score: 0, rerolls: 1, streak: 0, hits: 0, tops: 0 }));
+    G.players = names.map((name, i) => ({ name, dice: (dice && dice[i]) || settings.dice, color: COLORS[i % COLORS.length], score: 0, rerolls: 1, streak: 0, hits: 0, tops: 0 }));
     G.round = 1; G.used = new Set(); G.log = []; G.salt = Math.floor(Math.random() * 1e9);
     document.body.classList.remove('final-mode');
     startRound();
@@ -337,6 +364,7 @@
   const setFaces = arr => { arr.forEach((c, i) => (faces[i].textContent = c)); if (glRoll.ok) glRoll.setFaces(arr); };
   function beginTurn() {
     const p = current();
+    if (window.RollemLooks) RollemLooks.applyDice(p.dice);
     $('#rollWho').innerHTML = `${avatar(p, 'lg')}<div class="name"><em>${esc(p.name)}</em>'s turn</div>`;
     $('#rollWho').style.animation = 'none'; void $('#rollWho').offsetWidth; $('#rollWho').style.animation = '';
     $('#rollSub').textContent = p.streak >= 1 ? `🔥 ${p.streak} board hit${p.streak > 1 ? 's' : ''} in a row. Keep it going!` : 'Pass the phone, then roll the die';
@@ -921,13 +949,13 @@
     setTimeout(() => FX.rain(110), 300);
     setTimeout(() => { const p1 = $('.pod.p1 .avatar'); if (p1) FX.at(p1, 90, { speed: 12 }); }, 1300);
   }
-  $('#rematchBtn').addEventListener('click', () => { Sound.select(); FX.clear(); newGame(G.players.map(p => p.name)); });
+  $('#rematchBtn').addEventListener('click', () => { Sound.select(); FX.clear(); newGame(G.players.map(p => p.name), G.players.map(p => p.dice)); });
   $('#homeBtn').addEventListener('click', () => { Sound.tap(); FX.clear(); show('home'); });
 
   // ---------- menu ----------
   $$('[data-menu]').forEach(b => b.addEventListener('click', () => { Sound.tap(); pauseTimer('menu'); openModal('#menuModal'); }));
   function abortGame() { closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear(); document.body.classList.remove('final-mode'); }
-  $('#restartBtn').addEventListener('click', () => { Sound.select(); abortGame(); newGame(G.players.map(p => p.name)); });
+  $('#restartBtn').addEventListener('click', () => { Sound.select(); abortGame(); newGame(G.players.map(p => p.name), G.players.map(p => p.dice)); });
   $('#changeModeBtn').addEventListener('click', () => { Sound.tap(); abortGame(); renderModes(); show('modes'); });
   $('#modeAgainBtn').addEventListener('click', () => { Sound.tap(); FX.clear(); renderModes(); show('modes'); });
   $('#quitBtn').addEventListener('click', () => {
