@@ -247,7 +247,7 @@
   // ---------- GAME FLOW ----------
   function newGame(names) {
     const pool = catsForMode(settings.mode, settings.rating);
-    bank = E.buildBank(pool.length ? pool : window.ROLLEM_DATA);
+    bank = E.buildBank(pool.length ? pool : window.ROLLEM_DATA, { minPerLetter: settings.mode === 'all' ? 1 : 2 });
     G.players = names.map((name, i) => ({ name, color: COLORS[i % COLORS.length], score: 0, rerolls: 1, streak: 0, hits: 0, tops: 0 }));
     G.round = 1; G.used = new Set(); G.log = []; G.salt = Math.floor(Math.random() * 1e9);
     document.body.classList.remove('final-mode');
@@ -965,6 +965,7 @@
 
   // ---------- boot ----------
   renderSound();
+  { const pill = $('#catPill'); if (pill) pill.textContent = `${Math.floor(window.ROLLEM_DATA.length / 10) * 10}+ categories`; }
   if (!bank.dieLetters.length) toast('Prompt packs failed to load.', 5000);
   show('home');
 

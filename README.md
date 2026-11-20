@@ -10,6 +10,12 @@ ROLL'EM is a pass-and-play party word game for 2–12 players on one phone. It m
 3. Tap **Lock it in**. If your spelling is slightly off, it gets autocorrected, and you tap **Submit** to confirm.
 4. The survey board flips over to show the top 5 answers from "100 people".
 
+## Modes
+**Unlimited** mixes every category. There are also topic modes: Food & Drink, Animals & Nature, People & Places, Pop Culture, Home & Everyday, Life & Occasions, Describe It, and **After Dark** (PG-13: bars, dating, bad habits). Unlimited can be set to PG-13 (includes After Dark) or Family.
+
+## Customize
+Choose from 12 menu themes and 12 dice designs (Classic, Ruby, Onyx, Gold, Sapphire, Mint, Bubblegum, Marble, Wood, Neon, Galaxy, Lava). Your choices are saved on the device.
+
 ## Scoring
 | Result | Points |
 |---|---|
@@ -39,7 +45,9 @@ js/app.js             screen flow / UI controller
 js/audio.js           synthesized sound effects, adaptive tension music and haptics (no audio files)
 js/fx.js              confetti and particle canvas
 js/die3d.js           WebGL rounded-cube die (CSS cube fallback)
-js/data/*.js          prompt packs (101 categories)
+js/data/*.js          prompt packs (149 categories)
+js/data/_topics.js    game modes and the topic of each category
+js/themes.js          12 menu themes and 12 dice designs
 tools/validate-data.js  checks prompt packs
 tools/test-engine.js    engine unit tests and data cross-checks
 tools/smoke.js          headless full-game playthrough with screenshots

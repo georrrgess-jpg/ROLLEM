@@ -59,7 +59,8 @@
   }
 
   // ---------- data ----------
-  function buildBank(raw) {
+  function buildBank(raw, opts) {
+    const minPerLetter = (opts && opts.minPerLetter) || 1;
     const cats = [];
     const byLetter = Object.fromEntries(LETTERS.map(l => [l, []]));
     for (const c of raw || []) {
@@ -77,7 +78,8 @@
       }
       if (Object.keys(cat.letters).length) cats.push(cat);
     }
-    const dieLetters = LETTERS.filter(l => byLetter[l].length > 0);
+    let dieLetters = LETTERS.filter(l => byLetter[l].length >= minPerLetter);
+    if (dieLetters.length < 12) dieLetters = LETTERS.filter(l => byLetter[l].length > 0);
     return { cats, byLetter, dieLetters };
   }
 
