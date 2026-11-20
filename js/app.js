@@ -35,10 +35,13 @@
   // floating letter tiles behind the menus
   (function makeTiles() {
     const box = document.getElementById('tiles'); if (!box) return;
+    // tiles drift up in fixed lanes along the left and right edges, evenly staggered,
+    // so they never stack on each other or sit behind the logo / text in the middle
+    const lanes = [1, 9, 83, 91, 4, 87, 12, 80], N = lanes.length, dur = 26;
     let html = '';
-    for (let i = 0; i < 14; i++) {
-      const sz = 34 + Math.round(Math.random() * 30);
-      html += `<span class="float-tile" style="left:${Math.round(Math.random() * 92)}%;--sz:${sz}px;--dur:${16 + Math.random() * 14}s;--delay:${-Math.random() * 30}s;--dx:${Math.round(Math.random() * 80 - 40)}px;--r0:${Math.round(Math.random() * 60 - 30)}deg;--r1:${Math.round(Math.random() * 120 - 60)}deg;--op:${(0.35 + Math.random() * 0.4).toFixed(2)}">${'ABCDEFGHIJKLMNOPRSTW'[Math.floor(Math.random() * 20)]}</span>`;
+    for (let i = 0; i < N; i++) {
+      const sz = 36 + (i % 3) * 8;
+      html += `<span class="float-tile" style="left:${lanes[i]}%;--sz:${sz}px;--dur:${dur}s;--delay:${(-(i / N) * dur).toFixed(2)}s;--dx:${i % 2 ? -14 : 14}px;--r0:${(i % 2 ? -1 : 1) * 12}deg;--r1:${(i % 2 ? 1 : -1) * 25}deg;--op:0.3">${'RLMBOPESTW'[i % 10]}</span>`;
     }
     box.innerHTML = html;
   })();
@@ -225,6 +228,53 @@
   // ---------- ROLL ----------
   const die = $('#die'), dieAir = $('#dieAir'), dieBtn = $('#dieBtn'), faces = $$('#die .face'), dieShadow = $('#dieBtn .die-shadow');
   let rolling = false;
+  // WebGL dice (smooth rounded model); CSS cube stays as fallback
+  const POSE = { x: 0.42, y: -0.58 };
+  const glRoll = window.Die3D ? Die3D(dieAir, { maxDpr: LITE ? 1.5 : 2 }) : { ok: false };
+  const glHero = window.Die3D ? Die3D($('#heroAir'), { maxDpr: LITE ? 1.25 : 2 }) : { ok: false };
+  if (glHero.ok) glHero.setFaces(['R', 'O', 'L', 'E', 'M', '!']);
+  let spinAnim = null, glowAnim = null;
+  const SPIN_KEYS = [[0, 0], [0.06, -0.012], [0.23, 0.45], [0.42, 0.76], [0.55, 0.87], [0.68, 0.95], [0.84, 0.995], [0.92, 1.004], [1, 1]];
+  function spinProgress(k) {
+    for (let i = 1; i < SPIN_KEYS.length; i++) {
+      const [o1, p1] = SPIN_KEYS[i - 1], [o2, p2] = SPIN_KEYS[i];
+      if (k <= o2) return p1 + (p2 - p1) * ((k - o1) / (o2 - o1));
+    }
+    return 1;
+  }
+  // adaptive quality: if frames run slow while the die is animating, render it at lower resolution
+  let perfLast = 0, perfSum = 0, perfN = 0, degraded = LITE;
+  function watchPerf(now) {
+    if (degraded) return;
+    const dt = now - perfLast; perfLast = now;
+    if (dt <= 0 || dt > 200) return;
+    perfSum += dt; perfN++;
+    if (perfN >= 45) {
+      if (perfSum / perfN > 24) {
+        degraded = true;
+        [glRoll, glHero].forEach(d => d.ok && d.setMaxDpr(1));
+        document.body.classList.add('lite');
+      }
+      perfSum = 0; perfN = 0;
+    }
+  }
+  (function dieLoop(now) {
+    requestAnimationFrame(dieLoop);
+    if (document.hidden || !active) { perfLast = 0; return; }
+    if (active.id === 'home' || active.id === 'roll') watchPerf(now); else perfLast = 0;
+    if (active.id === 'home' && glHero.ok) { glHero.setPose(0.44 + 0.05 * Math.sin(now / 900), now / 1600); glHero.draw(); }
+    if (active.id === 'roll' && glRoll.ok) {
+      if (spinAnim) {
+        const k = Math.min(1, (now - spinAnim.t0) / spinAnim.D), p = spinProgress(k);
+        glRoll.setPose(POSE.x + 2 * Math.PI * spinAnim.kx * p, POSE.y + spinAnim.dir * 2 * Math.PI * spinAnim.ky * p);
+      } else if (!die.classList.contains('landed')) {
+        glRoll.setPose(POSE.x + 0.07 * Math.sin(now / 700), POSE.y + 0.14 * Math.sin(now / 1100));
+      }
+      if (glowAnim) { const g = Math.min(1, (now - glowAnim) / 350); glRoll.setGlow(g); if (g >= 1) glowAnim = null; }
+      glRoll.draw();
+    }
+  })(performance.now());
+  const setFaces = arr => { arr.forEach((c, i) => (faces[i].textContent = c)); if (glRoll.ok) glRoll.setFaces(arr); };
   function beginTurn() {
     const p = current();
     $('#rollWho').innerHTML = `${avatar(p, 'lg')}<div class="name"><em>${esc(p.name)}</em>'s turn</div>`;
@@ -237,10 +287,13 @@
   function resetDie() {
     rolling = false;
     die.classList.remove('landed');
+    spinAnim = null; glowAnim = null;
+    if (glRoll.ok) glRoll.setGlow(0);
     [die, dieAir, dieShadow].forEach(el => el.getAnimations().forEach(a => a.cancel()));
-    ['#shock1', '#shock2', '#letterPop'].forEach(s => $(s).classList.remove('go'));
-    die.classList.add('idle');
-    'ROLLEM'.split('').forEach((c, i) => (faces[i].textContent = c));
+    ['#shock1', '#shock2'].forEach(s => $(s).classList.remove('go'));
+    $('#letterReveal').hidden = true;
+    die.classList.add('idle'); dieAir.classList.add('bob');
+    setFaces('ROLLEM'.split(''));
     $('#tapHint').classList.remove('hide');
   }
   const randLetter = () => bank.dieLetters[Math.floor(Math.random() * bank.dieLetters.length)];
@@ -265,7 +318,7 @@
     E.recordTurn(history, turn); saveHistory();
     G.turn = turn;
     $('#tapHint').classList.add('hide');
-    die.classList.remove('idle');
+    die.classList.remove('idle'); dieAir.classList.remove('bob');
     die.getAnimations().forEach(a => a.cancel());
 
     // All motion is transform-only (GPU compositor): air = height + squash, die = spin, shadow = scale.
@@ -287,7 +340,8 @@
     ], { duration: D, fill: 'forwards' });
     const kx = 3 + (Math.random() < 0.5 ? 0 : 1), ky = 2 + (Math.random() < 0.5 ? 0 : 1), dir = Math.random() < 0.5 ? -1 : 1;
     const rot = p => `rotateX(${-20 + 360 * kx * p}deg) rotateY(${-32 + dir * 360 * ky * p}deg)`;
-    const spin = die.animate(
+    spinAnim = { t0: performance.now(), D, kx, ky, dir };
+    const spin = glRoll.ok ? { finished: sleep(D) } : die.animate(
       [[0, 0], [0.06, -0.012], [0.23, 0.45], [L1, 0.76], [0.55, 0.87], [L2, 0.95], [L3, 0.995], [0.92, 1.004], [1, 1]]
         .map(([o, p]) => ({ transform: rot(p), offset: o })),
       { duration: D, fill: 'forwards' });
@@ -306,21 +360,31 @@
       if (k === 0) { const st = $('#roll'); st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake'); }
     }, D * o));
     // letters flicker on the faces while airborne (cheap: a few text swaps, not every frame)
-    const iv = setInterval(() => { faces.forEach(f => (f.textContent = randLetter())); Sound.rattle(); }, LITE ? 150 : 95);
+    const iv = setInterval(() => { setFaces(faces.map(() => randLetter())); Sound.rattle(); }, LITE ? 150 : 95);
     setTimeout(() => {
       clearInterval(iv);
-      faces[0].textContent = turn.letter;
-      faces.slice(1).forEach(f => (f.textContent = randLetter()));
+      setFaces([turn.letter].concat(faces.slice(1).map(() => randLetter())));
     }, D * L2);
 
     await spin.finished.catch(() => {});
+    spinAnim = null;
+    if (glRoll.ok) glRoll.setPose(POSE.x, POSE.y);
     die.classList.add('landed');
+    glowAnim = performance.now();
     Sound.land();
-    $('#letterPop').textContent = turn.letter;
-    restart($('#shock1')); restart($('#shock2')); restart($('#letterPop')); restart($('#flash'));
-    FX.at(dieBtn, 80, { speed: 12, lift: 3 });
-    await sleep(950);
+    restart($('#shock1')); restart($('#shock2')); restart($('#flash'));
+    FX.at(dieBtn, 70, { speed: 12, lift: 3 });
+    await sleep(380);
+    // big "YOUR LETTER" reveal so the result is impossible to miss
+    const lr = $('#letterReveal');
+    $('#lrTile').textContent = turn.letter;
+    lr.hidden = false; lr.classList.remove('out'); restart(lr);
+    Sound.stinger();
+    setTimeout(() => FX.burst(window.innerWidth / 2, window.innerHeight * 0.46, 90, { speed: 13 }), 180);
+    await sleep(1250);
+    lr.classList.add('out');
     startAnswer();
+    setTimeout(() => { lr.hidden = true; lr.classList.remove('go', 'out'); }, 400);
   }
 
   // ---------- ANSWER ----------

@@ -140,6 +140,13 @@
       chord([784, 988, 1175, 1568], 0.6, { type: 'triangle', vol: 0.11, strum: 0.05, delay: 0.06, verb: true });
       vib([30, 40, 25]);
     },
+    stinger() {
+      chord([392, 523, 659, 784], 0.55, { type: 'sawtooth', lp: 2600, vol: 0.075 });
+      chord([196, 262], 0.6, { type: 'triangle', vol: 0.16 });
+      [1568, 2093].forEach((f, i) => tone(f, 0.5, { type: 'sine', vol: 0.13, delay: 0.08 + i * 0.07, verb: true }));
+      noise(0.4, { freq: 5000, filter: 'highpass', vol: 0.08 });
+      vib([20, 30, 50]);
+    },
     whoosh() { noise(0.3, { freq: 800, sweep: 2400, q: 0.7, vol: 0.14, swell: true }); },
     tick(urgent) {
       if (urgent) { tone(1250, 0.05, { type: 'square', vol: 0.09, lp: 4000 }); vib(10); }

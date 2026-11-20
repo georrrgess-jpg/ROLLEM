@@ -15,7 +15,7 @@ const sizes = [['small', 320, 568], ['typical', 390, 844], ['tall', 430, 932]];
     await p.reload(); await p.waitForTimeout(1200);
     const shot = s => p.screenshot({ path: `${out}/${name}-${s}.png` });
     await shot('1-home');
-    await p.click('#playBtn'); await p.waitForTimeout(500);
+    await p.click('#playBtn', { force: true }); await p.waitForTimeout(500);
     await p.fill('#playerList input >> nth=0', 'Alexandria');
     await p.fill('#playerList input >> nth=1', 'Bo');
     await p.click('#addPlayer'); await p.fill('#playerList input >> nth=2', 'Christopher the Great');
@@ -25,7 +25,7 @@ const sizes = [['small', 320, 568], ['typical', 390, 844], ['tall', 430, 932]];
     await shot('3-roll');
     for (let turn = 0; turn < 9; turn++) {
       await p.waitForSelector('#roll.active', { timeout: 8000 }).catch(async () => { await p.waitForTimeout(2800); await p.waitForSelector('#roll.active'); });
-      await p.click('#dieBtn');
+      await p.click('#dieBtn', { force: true });
       if (turn === 0) { await p.waitForTimeout(700); await shot('4-rolling'); }
       await p.waitForSelector('#answer.active', { timeout: 6000 });
       await p.waitForTimeout(500);
