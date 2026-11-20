@@ -239,7 +239,7 @@ window.ROLLEM_DATA.push(
   R: ["Rubber Ball", "Rubber Band", "Racquetball", "Rabbit", "Rubber Duck", "Rugby Ball"],
   S: ["Super Ball", "Soccer Ball", "Spring", "Squash Ball", "Slinky", "Softball", "Stress Ball", "Skipping Rope", "Space Hopper"],
   T: ["Trampoline", "Tennis Ball", "Tigger", "Toy Ball", "Tire", "Tetherball", "Table Tennis Ball", "Toddler", "Tire Swing"],
-  W: ["Wiffle Ball|Whiffle Ball", "Whoopee Ball", "Water Balloon", "Wallball", "Wrecking Ball", "Water Polo Ball"]
+  W: ["Wiffle Ball|Whiffle Ball", "Water Balloon", "Wallball", "Wrecking Ball", "Water Polo Ball"]
 }},
 { id: "open", prompt: "Something you can open", topic: "words", answers: {
   A: ["Account", "Application|App", "Attic Door", "Apple Juice", "Aluminum Can", "Advent Calendar", "Antique Chest"],
