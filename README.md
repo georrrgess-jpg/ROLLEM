@@ -15,12 +15,12 @@ ROLL'EM is a pass-and-play party word game for 2–12 players on one phone. It m
 |---|---|
 | Matches a top-5 board answer | Its survey number (6–44) |
 | Valid answer that isn't on the board | 5 |
-| Unknown answer the next player accepts | 5 |
+| Unknown answer the next player accepts | 5 (in **Strict** mode, unknown answers score 0 and there's no judging) |
 | Speed bonus (board hits only) | up to +10 for answering fast |
 | Streak bonus | +5 / +10 / +15 for consecutive board hits |
 | Final round | everything ×2 (or ×3) |
 
-Each player gets one **reroll** per game, but the clock keeps running. Letters with fewer prompts (like Q) come up less often. The starting player rotates every round.
+Prompts are picked least-recently-used, and that history is remembered across games, so the same prompt won't come back for a long time. Each player gets one **reroll** per game, but the clock keeps running. Letters with fewer prompts (like Q) come up less often. The starting player rotates every round.
 
 ## Play it
 It's a static web app with no build step and no server code.
@@ -28,7 +28,7 @@ It's a static web app with no build step and no server code.
 - **Locally:** run `python3 -m http.server` in this folder, then open `http://localhost:8000`.
 - **On phones:** host the folder on any static host (GitHub Pages works: Settings → Pages → deploy from branch). Open the URL on a phone and use **Add to Home Screen** to install it as an app. It works offline after the first visit.
 
-Voice input uses the browser's built-in speech recognition (Chrome on Android, Safari on iOS 14.5+). Where that isn't available, the mic button hides itself.
+Voice input uses the browser's built-in speech recognition (Chrome on Android, Safari on iOS 14.5+). If the browser's speech service isn't available (for example in some home-screen apps, or offline), the mic button opens the keyboard so you can use its built-in dictation 🎤 instead.
 
 ## Project layout
 ```
@@ -36,12 +36,13 @@ index.html            screens and markup
 css/style.css         all styling and animation
 js/engine.js          pure game logic: matching, autocorrect, scoring, prompt picking
 js/app.js             screen flow / UI controller
-js/audio.js           synthesized sound effects and haptics (no audio files)
+js/audio.js           synthesized sound effects, adaptive tension music and haptics (no audio files)
 js/fx.js              confetti and particle canvas
-js/data/*.js          prompt packs (40 categories)
+js/data/*.js          prompt packs (70 categories)
 tools/validate-data.js  checks prompt packs
 tools/test-engine.js    engine unit tests and data cross-checks
 tools/smoke.js          headless full-game playthrough with screenshots
+tools/perf.js           frame pacing of the dice roll under CPU throttling (low-end phone check)
 ```
 
 ## Adding prompts

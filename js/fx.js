@@ -5,9 +5,10 @@
   const c = cv.getContext('2d');
   let W = 0, H = 0, dpr = 1, parts = [], running = false;
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const lite = () => document.body.classList.contains('lite');
 
   function resize() {
-    dpr = Math.min(2, window.devicePixelRatio || 1);
+    dpr = Math.min(lite() ? 1 : 2, window.devicePixelRatio || 1);
     W = window.innerWidth; H = window.innerHeight;
     cv.width = W * dpr; cv.height = H * dpr;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -50,7 +51,7 @@
     burst(x, y, n, opts) {
       if (reduce) return;
       opts = opts || {};
-      n = Math.min(n || 40, 160);
+      n = Math.round(Math.min(n || 40, 160) * (lite() ? 0.45 : 1));
       for (let i = 0; i < n; i++) {
         const ang = Math.random() * Math.PI * 2, sp = (opts.speed || 9) * (0.35 + Math.random() * 0.75);
         parts.push({
@@ -66,7 +67,7 @@
     },
     rain(n) {
       if (reduce) return;
-      n = Math.min(n || 120, 200);
+      n = Math.round(Math.min(n || 120, 200) * (lite() ? 0.5 : 1));
       for (let i = 0; i < n; i++) {
         parts.push({
           x: Math.random() * W, y: -20 - Math.random() * H * 0.6, vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 3,

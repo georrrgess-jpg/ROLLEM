@@ -118,12 +118,12 @@
 
   // Classify a submitted answer.
   // returns { kind: 'board'|'valid'|'vote'|'wrongLetter'|'blank', entry?, rank? }
-  function judge(entries, letter, input) {
+  function judge(entries, letter, input, strict) {
     if (!norm(input)) return { kind: 'blank' };
     const e = findEntry(entries, input);
     if (e) return e.rank < 5 ? { kind: 'board', entry: e, rank: e.rank } : { kind: 'valid', entry: e };
     if (!startsWithLetter(input, letter)) return { kind: 'wrongLetter' };
-    return { kind: 'vote' };
+    return { kind: strict ? 'unlisted' : 'vote' };
   }
 
   // ---------- scoring ----------
@@ -144,24 +144,53 @@
 
   // ---------- turn generation ----------
   // Letters with few prompts (Q, U...) come up less often; weight = prompt count, capped.
-  function rollLetter(bank, rand) {
-    const w = bank.dieLetters.map(l => Math.min(30, bank.byLetter[l].length));
+  // ---------- history-aware turn picking ----------
+  // history: { n, cats: {id: lastTurn}, pairs: {"id:L": lastTurn}, letters: [recent letters] }
+  function newHistory() { return { n: 0, cats: {}, pairs: {}, letters: [] }; }
+
+  // Letters with few prompts (Q, U...) come up less often; recently rolled letters are strongly damped.
+  function rollLetter(bank, history, rand) {
+    const recent = history.letters.slice(-5);
+    const w = bank.dieLetters.map(l => {
+      let wt = Math.min(30, bank.byLetter[l].length);
+      const idx = recent.lastIndexOf(l);
+      if (idx >= 0) wt *= 0.08 + 0.18 * (recent.length - 1 - idx); // just rolled -> ~8% weight
+      return wt;
+    });
     let x = rand() * w.reduce((a, b) => a + b, 0);
     for (let i = 0; i < w.length; i++) { x -= w[i]; if (x < 0) return bank.dieLetters[i]; }
     return bank.dieLetters[bank.dieLetters.length - 1];
   }
-  function pickTurn(bank, usedCatIds, rand, salt) {
+
+  // Least-recently-used category for the letter; never-seen categories first, ties broken randomly.
+  function pickTurn(bank, history, rand, salt) {
     rand = rand || Math.random;
-    const letter = rollLetter(bank, rand);
+    history = history || newHistory();
+    const letter = rollLetter(bank, history, rand);
     const options = bank.byLetter[letter];
-    let fresh = options.filter(c => !usedCatIds.has(c.id + ':' + letter) && !usedCatIds.has(c.id));
-    if (!fresh.length) fresh = options.filter(c => !usedCatIds.has(c.id + ':' + letter));
-    if (!fresh.length) fresh = options;
-    const cat = fresh[Math.floor(rand() * fresh.length)];
+    const age = c => {
+      const a = history.cats[c.id], b = history.pairs[c.id + ':' + letter];
+      // a category seen with this exact letter counts as "more recent" than one seen with another letter
+      return Math.max(a == null ? -1e9 : a, b == null ? -1e9 : b + 0.5);
+    };
+    let best = Infinity, pool = [];
+    for (const c of options) {
+      const v = age(c);
+      if (v < best - 1e-9) { best = v; pool = [c]; } else if (Math.abs(v - best) < 1e-9) pool.push(c);
+    }
+    const cat = pool[Math.floor(rand() * pool.length)];
     return { letter, cat, entries: cat.letters[letter], counts: surveyCounts(cat.id, letter, salt) };
   }
+  function recordTurn(history, turn) {
+    history.n++;
+    history.cats[turn.cat.id] = history.n;
+    history.pairs[turn.cat.id + ':' + turn.letter] = history.n;
+    history.letters.push(turn.letter);
+    if (history.letters.length > 12) history.letters.splice(0, history.letters.length - 12);
+    return history;
+  }
 
-  const api = { LETTERS, norm, key, dist, buildBank, surveyCounts, findEntry, suggest, judge, score, pickTurn, startsWithLetter, OFF_BOARD_POINTS };
+  const api = { LETTERS, norm, key, dist, buildBank, surveyCounts, findEntry, suggest, judge, score, pickTurn, recordTurn, newHistory, startsWithLetter, OFF_BOARD_POINTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RollemEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

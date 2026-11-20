@@ -19,7 +19,8 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div id="bg" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span></div>
+  <div id="bg" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span><div id="tiles"></div></div>
+  <div class="danger" id="danger" aria-hidden="true"></div>
   <canvas id="fx" aria-hidden="true"></canvas>
 
   <main id="app">
@@ -27,18 +28,31 @@
     <section class="screen" id="home" data-screen>
       <header class="topbar">
         <span></span>
-        <button class="icon-btn" id="soundToggle" aria-label="Toggle sound"></button>
+        <div class="topbar-icons">
+          <button class="icon-btn" id="musicToggle" aria-label="Toggle music"></button>
+          <button class="icon-btn" id="soundToggle" aria-label="Toggle sound"></button>
+        </div>
       </header>
       <div class="home-hero">
         <div class="hero-die" aria-hidden="true">
-          <div class="mini-cube spin"><i>R</i><i>O</i><i>L</i><i>E</i><i>M</i><i>!</i></div>
+          <div class="die-shadow"></div>
+          <div class="die-air" id="heroAir">
+            <div class="die" id="heroDie">
+              <div class="core cx"></div><div class="core cy"></div><div class="core cz"></div>
+              <div class="face f1">R</div><div class="face f2">O</div><div class="face f3">L</div>
+              <div class="face f4">E</div><div class="face f5">M</div><div class="face f6">!</div>
+            </div>
+          </div>
         </div>
-        <h1 class="logo"><span>ROLL</span><span class="apos">'</span><span class="em">EM</span></h1>
-        <p class="tagline">Roll a letter. Beat the clock. Hit the board.</p>
+        <h1 class="logo" aria-label="ROLL'EM"><span class="ch" style="--i:0">R</span><span class="ch" style="--i:1">O</span><span class="ch" style="--i:2">L</span><span class="ch" style="--i:3">L</span><span class="ch gold apos" style="--i:4">'</span><span class="ch gold" style="--i:5">E</span><span class="ch gold" style="--i:6">M</span></h1>
+        <p class="tagline">Roll a letter. <b>Beat the clock.</b> Hit the board.</p>
+        <div class="home-pills"><span class="pill">2–12 players</span><span class="pill">One phone</span><span class="pill">70 categories</span></div>
       </div>
       <div class="home-actions">
-        <button class="btn btn-primary btn-xl" id="playBtn">Play</button>
-        <button class="btn btn-ghost" id="howBtn">How to play</button>
+        <button class="btn btn-primary btn-xl btn-shine btn-pulse" id="playBtn">Play</button>
+        <div class="home-sub">
+          <button class="btn btn-ghost" id="howBtn">How to play</button>
+        </div>
       </div>
     </section>
 
@@ -70,6 +84,11 @@
           <div class="chips" id="multChips" role="radiogroup" aria-label="Final round multiplier"></div>
           <p class="hint">Every point in the last round is multiplied. Nobody's safe.</p>
         </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Answers not on our list</h3></div>
+          <div class="chips two" id="judgeChips" role="radiogroup" aria-label="Answers not on our list"></div>
+          <p class="hint" id="judgeHint"></p>
+        </div>
       </div>
       <footer class="bottombar">
         <p class="error-text" id="setupError" role="alert"></p>
@@ -91,12 +110,17 @@
         <p class="roll-sub" id="rollSub">Pass the phone, then tap the die</p>
         <button class="die-wrap" id="dieBtn" aria-label="Roll the die">
           <div class="die-shadow"></div>
-          <div class="die" id="die">
-            <div class="face f1"></div><div class="face f2"></div><div class="face f3"></div>
-            <div class="face f4"></div><div class="face f5"></div><div class="face f6"></div>
+          <div class="die-air" id="dieAir">
+            <div class="die" id="die">
+              <div class="core cx"></div><div class="core cy"></div><div class="core cz"></div>
+              <div class="face f1">R</div><div class="face f2">O</div><div class="face f3">L</div>
+              <div class="face f4">L</div><div class="face f5">E</div><div class="face f6">M</div>
+            </div>
           </div>
+          <div class="shockwave" id="shock1"></div><div class="shockwave s2" id="shock2"></div>
+          <div class="letter-pop" id="letterPop"></div>
         </button>
-        <p class="tap-hint" id="tapHint">Tap to roll</p>
+        <p class="tap-hint" id="tapHint">Tap or flick to roll</p>
       </div>
     </section>
 
@@ -110,7 +134,10 @@
       </header>
       <div class="answer-body">
         <div class="prompt-card" id="promptCard">
-          <div class="letter-tile" id="ansLetter">A</div>
+          <div class="ring-timer" id="ringTimer">
+            <svg viewBox="0 0 104 104" aria-hidden="true"><circle class="rt-bg" cx="52" cy="52" r="47"/><circle class="rt-fg" id="rtFg" cx="52" cy="52" r="47"/></svg>
+            <div class="letter-tile" id="ansLetter">A</div>
+          </div>
           <div class="prompt-text">
             <span class="prompt-label">Name…</span>
             <span class="prompt-main" id="ansPrompt">A fruit</span>
@@ -197,6 +224,7 @@
       <h3 id="menuTitle">Paused</h3>
       <button class="btn btn-primary" data-close>Resume</button>
       <button class="btn btn-ghost" id="menuSound"></button>
+      <button class="btn btn-ghost" id="menuMusic"></button>
       <button class="btn btn-danger" id="quitBtn">Quit to home</button>
     </div>
   </div>
@@ -210,7 +238,7 @@
           <li><b>Answer the prompt</b> with something that starts with that letter. Type it or tap the mic. The clock is ticking!</li>
           <li><b>Lock it in.</b> Small typos get fixed for you. Check the fix, then tap Submit.</li>
           <li><b>Hit the board.</b> We surveyed 100 people. Match a top-5 answer to score its survey number. The #1 answer pays the most.</li>
-          <li><b>Off the board?</b> A valid answer still earns <b>5</b>. If we don't recognise it, the next player judges whether it counts.</li>
+          <li><b>Off the board?</b> A valid answer from our answer pool still earns <b>5</b>. If we don't recognise it, the next player judges it, or in <b>Strict</b> mode it scores nothing.</li>
           <li><b>Bonuses.</b> Hit the board fast for up to +10. Hit it on back-to-back turns for a streak bonus.</li>
           <li><b>Reroll.</b> Hate your letter? Every player gets one reroll per game, but the clock keeps running.</li>
           <li><b>Final round.</b> All points are doubled (or tripled), so anyone can still win.</li>
@@ -220,6 +248,7 @@
     </div>
   </div>
 
+  <div class="flash" id="flash" aria-hidden="true"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/data/_init.js"></script>
@@ -227,6 +256,9 @@
   <script src="js/data/nature.js"></script>
   <script src="js/data/people.js"></script>
   <script src="js/data/things.js"></script>
+  <script src="js/data/occasions.js"></script>
+  <script src="js/data/everyday.js"></script>
+  <script src="js/data/describe.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/fx.js"></script>

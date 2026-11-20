@@ -19,7 +19,29 @@
     get(k, d) { try { const v = localStorage.getItem('rollem.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('rollem.' + k, JSON.stringify(v)); } catch (e) {} }
   };
-  const settings = Object.assign({ timer: 20, rounds: 5, mult: 2 }, store.get('settings', {}));
+  const settings = Object.assign({ timer: 20, rounds: 5, mult: 2, judge: 'vote' }, store.get('settings', {}));
+
+  // Low-end / reduced-motion devices get a lighter effects budget (fewer particles, no extra filters).
+  const LITE = (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4) ||
+    (navigator.deviceMemory > 0 && navigator.deviceMemory <= 3) ||
+    (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (LITE) { document.body.classList.add('lite'); window.dispatchEvent(new Event('resize')); }
+
+  // Prompt history persists across games so the same prompts don't keep coming back.
+  let history = store.get('history', null);
+  if (!history || !history.cats || !Array.isArray(history.letters)) history = E.newHistory();
+  const saveHistory = () => store.set('history', history);
+
+  // floating letter tiles behind the menus
+  (function makeTiles() {
+    const box = document.getElementById('tiles'); if (!box) return;
+    let html = '';
+    for (let i = 0; i < 14; i++) {
+      const sz = 34 + Math.round(Math.random() * 30);
+      html += `<span class="float-tile" style="left:${Math.round(Math.random() * 92)}%;--sz:${sz}px;--dur:${16 + Math.random() * 14}s;--delay:${-Math.random() * 30}s;--dx:${Math.round(Math.random() * 80 - 40)}px;--r0:${Math.round(Math.random() * 60 - 30)}deg;--r1:${Math.round(Math.random() * 120 - 60)}deg;--op:${(0.35 + Math.random() * 0.4).toFixed(2)}">${'ABCDEFGHIJKLMNOPRSTW'[Math.floor(Math.random() * 20)]}</span>`;
+    }
+    box.innerHTML = html;
+  })();
   let setupNames = store.get('players', ['', '']);
   if (!Array.isArray(setupNames) || setupNames.length < 2) setupNames = ['', ''];
 
@@ -63,10 +85,18 @@
   // ---------- sound toggle ----------
   const ICON_ON = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
   const ICON_OFF = '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
+  const ICON_MUSIC = '<svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>';
   function renderSound() {
     $('#soundToggle').innerHTML = Sound.enabled ? ICON_ON : ICON_OFF;
-    $('#menuSound').textContent = Sound.enabled ? 'Sound: On' : 'Sound: Off';
+    $('#menuSound').textContent = Sound.enabled ? 'Sound effects: On' : 'Sound effects: Off';
+    $('#musicToggle').innerHTML = ICON_MUSIC;
+    $('#musicToggle').classList.toggle('off', !Sound.music);
+    $('#musicToggle').setAttribute('aria-pressed', Sound.music);
+    $('#menuMusic').textContent = Sound.music ? 'Music: On' : 'Music: Off';
   }
+  function toggleMusic() { Sound.setMusic(!Sound.music); renderSound(); Sound.select(); if (Sound.music && G.timer) Sound.startMusic(); }
+  $('#musicToggle').addEventListener('click', toggleMusic);
+  $('#menuMusic').addEventListener('click', toggleMusic);
   function toggleSound() { Sound.setEnabled(!Sound.enabled); renderSound(); Sound.select(); }
   $('#soundToggle').addEventListener('click', toggleSound);
   $('#menuSound').addEventListener('click', toggleSound);
@@ -92,8 +122,10 @@
     el.innerHTML = values.map(v => `<button class="chip" role="radio" aria-checked="${v === cur}" data-v="${v}">${label(v)}</button>`).join('');
     el.onclick = e => {
       const b = e.target.closest('.chip'); if (!b) return;
-      settings[key] = Number(b.dataset.v); store.set('settings', settings); Sound.select();
+      const raw = b.dataset.v;
+      settings[key] = isNaN(raw) ? raw : Number(raw); store.set('settings', settings); Sound.select();
       el.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-checked', c === b));
+      if (key === 'judge') renderJudgeHint();
     };
   }
   function renderPlayers(focusLast) {
@@ -131,11 +163,18 @@
     if (setupNames.length >= MAX_PLAYERS) return;
     Sound.tap(); setupNames.push(''); store.set('players', setupNames); renderPlayers(true);
   });
+  function renderJudgeHint() {
+    $('#judgeHint').textContent = settings.judge === 'strict'
+      ? 'Only answers from our answer pool count: top 5 on the board, plus hundreds more valid answers for 5 pts. No arguing!'
+      : 'If an answer isn’t in our pool, the next player decides whether it counts.';
+  }
   function renderSetup() {
     renderPlayers();
     renderChips($('#timerChips'), TIMERS, settings.timer, v => v + 's', 'timer');
     renderChips($('#roundChips'), ROUNDS, settings.rounds, v => String(v), 'rounds');
     renderChips($('#multChips'), MULTS, settings.mult, v => (v === 2 ? '2× Double' : '3× Triple'), 'mult');
+    renderChips($('#judgeChips'), ['vote', 'strict'], settings.judge, v => (v === 'vote' ? 'Player judges' : 'Strict: list only'), 'judge');
+    renderJudgeHint();
     $('#setupError').textContent = '';
   }
   $('#startBtn').addEventListener('click', () => {
@@ -184,81 +223,105 @@
   }
 
   // ---------- ROLL ----------
-  const die = $('#die'), dieBtn = $('#dieBtn'), faces = $$('#die .face');
-  let rolling = false, autoRoll = false;
+  const die = $('#die'), dieAir = $('#dieAir'), dieBtn = $('#dieBtn'), faces = $$('#die .face'), dieShadow = $('#dieBtn .die-shadow');
+  let rolling = false;
   function beginTurn() {
     const p = current();
     $('#rollWho').innerHTML = `${avatar(p, 'lg')}<div class="name"><em>${esc(p.name)}</em>'s turn</div>`;
     $('#rollWho').style.animation = 'none'; void $('#rollWho').offsetWidth; $('#rollWho').style.animation = '';
-    $('#rollSub').textContent = p.streak >= 1 ? `🔥 ${p.streak} board hit${p.streak > 1 ? 's' : ''} in a row. Keep it going!` : 'Pass the phone, then tap the die';
+    $('#rollSub').textContent = p.streak >= 1 ? `🔥 ${p.streak} board hit${p.streak > 1 ? 's' : ''} in a row. Keep it going!` : 'Pass the phone, then roll the die';
     hud($('#roll'));
     resetDie();
     show('roll');
   }
   function resetDie() {
     rolling = false;
-    dieBtn.classList.remove('rolling', 'landed');
     die.classList.remove('landed');
-    die.getAnimations().forEach(a => a.cancel());
+    [die, dieAir, dieShadow].forEach(el => el.getAnimations().forEach(a => a.cancel()));
+    ['#shock1', '#shock2', '#letterPop'].forEach(s => $(s).classList.remove('go'));
     die.classList.add('idle');
-    const sample = ['R', 'O', 'L', 'L', 'E', 'M'];
-    faces.forEach((f, i) => (f.textContent = sample[i]));
+    'ROLLEM'.split('').forEach((c, i) => (faces[i].textContent = c));
     $('#tapHint').classList.remove('hide');
   }
   const randLetter = () => bank.dieLetters[Math.floor(Math.random() * bank.dieLetters.length)];
+  const restart = (el) => { el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); };
 
-  async function roll() {
+  // tap the die, or flick upward anywhere on the stage (flick speed = throw height)
+  let flick = null;
+  const stageEl = $('.roll-stage');
+  stageEl.addEventListener('pointerdown', e => { flick = { y: e.clientY, t: performance.now() }; });
+  stageEl.addEventListener('pointerup', e => {
+    if (!flick) return;
+    const dy = flick.y - e.clientY, dt = Math.max(1, performance.now() - flick.t); flick = null;
+    if (dy > 40 && dt < 600) roll(Math.min(1, dy / dt / 1.5));
+  });
+  dieBtn.addEventListener('click', () => roll(0.4));
+
+  async function roll(power) {
     if (rolling) return;
     rolling = true;
-    const turn = E.pickTurn(bank, G.used, null, G.salt);
+    Sound.resume();
+    const turn = E.pickTurn(bank, history, null, G.salt);
+    E.recordTurn(history, turn); saveHistory();
     G.turn = turn;
-    G.used.add(turn.cat.id + ':' + turn.letter); G.used.add(turn.cat.id);
     $('#tapHint').classList.add('hide');
     die.classList.remove('idle');
-    dieBtn.classList.add('rolling');
+    die.getAnimations().forEach(a => a.cancel());
 
-    const D = 1650;
-    const xs = 1440 - 12, ys = 1080 - 16;
-    const anim = die.animate([
-      { transform: 'translateY(0) rotateX(-18deg) rotateY(-28deg) scale(1)', easing: 'cubic-bezier(.2,.7,.4,1)' },
-      { transform: 'translateY(-34vh) rotateX(420deg) rotateY(300deg) scale(1.12)', offset: 0.22, easing: 'cubic-bezier(.6,0,.9,.5)' },
-      { transform: 'translateY(0) rotateX(860deg) rotateY(640deg) scale(1)', offset: 0.45, easing: 'cubic-bezier(.2,.7,.4,1)' },
-      { transform: 'translateY(-10vh) rotateX(1160deg) rotateY(880deg) scale(1.05)', offset: 0.6, easing: 'cubic-bezier(.6,0,.9,.5)' },
-      { transform: 'translateY(0) rotateX(1360deg) rotateY(1030deg) scale(1)', offset: 0.76, easing: 'cubic-bezier(.2,.7,.4,1)' },
-      { transform: 'translateY(-2.5vh) rotateX(1410deg) rotateY(1058deg)', offset: 0.87, easing: 'cubic-bezier(.6,0,.9,.5)' },
-      { transform: `translateY(0) rotateX(${xs}deg) rotateY(${ys}deg) scale(1)` }
+    // All motion is transform-only (GPU compositor): air = height + squash, die = spin, shadow = scale.
+    const D = LITE ? 1500 : 1750;
+    const H = Math.round(Math.min(window.innerHeight * (0.26 + 0.12 * (power || 0)), 380));
+    const L1 = 0.42, L2 = 0.68, L3 = 0.84;
+    const up = 'cubic-bezier(.2,.75,.35,1)', down = 'cubic-bezier(.6,0,.85,.4)';
+    dieAir.animate([
+      { transform: 'translate3d(0,0,0) scale(1,1)' },
+      { transform: 'translate3d(0,10px,0) scale(1.16,.8)', offset: 0.06, easing: up },
+      { transform: `translate3d(0,${-H}px,0) scale(.95,1.07)`, offset: 0.23, easing: down },
+      { transform: 'translate3d(0,0,0) scale(1,1)', offset: L1 - 0.015 },
+      { transform: 'translate3d(0,7px,0) scale(1.17,.83)', offset: L1, easing: up },
+      { transform: `translate3d(0,${-H * 0.3}px,0) scale(.97,1.04)`, offset: 0.55, easing: down },
+      { transform: 'translate3d(0,4px,0) scale(1.1,.9)', offset: L2, easing: up },
+      { transform: `translate3d(0,${-H * 0.09}px,0) scale(1,1)`, offset: 0.76, easing: down },
+      { transform: 'translate3d(0,2px,0) scale(1.05,.95)', offset: L3, easing: up },
+      { transform: 'translate3d(0,0,0) scale(1,1)' }
+    ], { duration: D, fill: 'forwards' });
+    const kx = 3 + (Math.random() < 0.5 ? 0 : 1), ky = 2 + (Math.random() < 0.5 ? 0 : 1), dir = Math.random() < 0.5 ? -1 : 1;
+    const rot = p => `rotateX(${-20 + 360 * kx * p}deg) rotateY(${-32 + dir * 360 * ky * p}deg)`;
+    const spin = die.animate(
+      [[0, 0], [0.06, -0.012], [0.23, 0.45], [L1, 0.76], [0.55, 0.87], [L2, 0.95], [L3, 0.995], [0.92, 1.004], [1, 1]]
+        .map(([o, p]) => ({ transform: rot(p), offset: o })),
+      { duration: D, fill: 'forwards' });
+    const sh = s => `translateX(-50%) scale(${s})`;
+    dieShadow.animate([
+      { transform: sh(1), opacity: 1 }, { transform: sh(1.12), opacity: 1, offset: 0.06 },
+      { transform: sh(0.3), opacity: 0.3, offset: 0.23 }, { transform: sh(1.12), opacity: 1, offset: L1 },
+      { transform: sh(0.7), opacity: 0.6, offset: 0.55 }, { transform: sh(1.06), opacity: 1, offset: L2 },
+      { transform: sh(0.92), opacity: 0.85, offset: 0.76 }, { transform: sh(1), opacity: 1, offset: L3 }, { transform: sh(1), opacity: 1 }
     ], { duration: D, fill: 'forwards' });
 
-    const start = performance.now();
-    let i = 0, lastSwap = 0;
-    await new Promise(resolve => {
-      function frame(now) {
-        const t = now - start;
-        if (t < D * 0.74) {
-          if (now - lastSwap > 60 + t / 25) {
-            lastSwap = now;
-            faces.forEach(f => (f.textContent = randLetter()));
-            Sound.rattle(i++);
-          }
-          requestAnimationFrame(frame);
-        } else {
-          faces[0].textContent = turn.letter;
-          faces.slice(1).forEach(f => (f.textContent = randLetter()));
-          resolve();
-        }
-      }
-      requestAnimationFrame(frame);
-    });
-    await anim.finished.catch(() => {});
+    // sound synced to the bounces
+    setTimeout(() => Sound.launch(), D * 0.05);
+    [[L1, 1], [L2, 0.55], [L3, 0.3]].forEach(([o, s], k) => setTimeout(() => {
+      Sound.clack(s);
+      if (k === 0) { const st = $('#roll'); st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake'); }
+    }, D * o));
+    // letters flicker on the faces while airborne (cheap: a few text swaps, not every frame)
+    const iv = setInterval(() => { faces.forEach(f => (f.textContent = randLetter())); Sound.rattle(); }, LITE ? 150 : 95);
+    setTimeout(() => {
+      clearInterval(iv);
+      faces[0].textContent = turn.letter;
+      faces.slice(1).forEach(f => (f.textContent = randLetter()));
+    }, D * L2);
+
+    await spin.finished.catch(() => {});
     die.classList.add('landed');
-    dieBtn.classList.add('landed');
     Sound.land();
-    FX.at(dieBtn, 70, { speed: 11, lift: 3 });
-    const stage = $('#roll'); stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake');
-    await sleep(850);
+    $('#letterPop').textContent = turn.letter;
+    restart($('#shock1')); restart($('#shock2')); restart($('#letterPop')); restart($('#flash'));
+    FX.at(dieBtn, 80, { speed: 12, lift: 3 });
+    await sleep(950);
     startAnswer();
   }
-  dieBtn.addEventListener('click', roll);
 
   // ---------- ANSWER ----------
   const input = $('#answerInput'), lockBtn = $('#lockBtn'), fixNote = $('#fixNote');
@@ -280,6 +343,7 @@
     Sound.whoosh();
     startTimer(settings.timer, G.carry);
     G.carry = null;
+    Sound.startMusic();
     setTimeout(() => { if (active && active.id === 'answer') input.focus({ preventScroll: true }); }, 380);
   }
 
@@ -344,26 +408,46 @@
   });
 
   // ---------- timer ----------
+  const RING_C = 2 * Math.PI * 47, rtFg = $('#rtFg'), ansScr = $('#answer'), danger = $('#danger');
+  rtFg.style.strokeDasharray = RING_C.toFixed(1);
+  let lastHue = -1;
+  function setTimerColor(f) {
+    // teal (160) -> gold (45) -> red (0) as time runs out
+    const h = Math.round(f > 0.5 ? 45 + (f - 0.5) * 2 * 115 : f * 2 * 45);
+    if (Math.abs(h - lastHue) < 3) return;
+    lastHue = h;
+    ansScr.style.setProperty('--tcol', `hsl(${h} 95% 58%)`);
+  }
   function startTimer(secs, startMs) {
     stopTimer();
-    const fill = $('#timerFill'), num = $('#timerNum');
+    const fill = $('#timerFill'), num = $('#timerNum'), ring = $('#ringTimer');
     const left = startMs ? Math.min(startMs, secs * 1000) : secs * 1000;
-    const T = { total: secs * 1000, left, last: performance.now(), raf: 0, lastSec: Math.ceil(left / 1000) };
+    const T = { total: secs * 1000, left, last: performance.now(), raf: 0, lastSec: Math.ceil(left / 1000), hot: false };
     G.timer = T;
-    fill.classList.remove('low'); num.classList.remove('low');
+    num.classList.remove('low'); ring.classList.remove('low'); danger.classList.remove('on');
+    lastHue = -1; setTimerColor(left / T.total);
     num.textContent = T.lastSec;
     fill.style.transform = `scaleX(${left / T.total})`;
+    rtFg.style.strokeDashoffset = (RING_C * (1 - left / T.total)).toFixed(1);
     function frame(now) {
       if (G.timer !== T) return;
       if (!pauses.size) {
         T.left -= now - T.last;
+        const f = Math.max(0, T.left / T.total);
         const sec = Math.max(0, Math.ceil(T.left / 1000));
         if (sec !== T.lastSec) {
           T.lastSec = sec; num.textContent = sec;
-          if (sec <= 5 && sec > 0) { num.classList.add('low'); fill.classList.add('low'); Sound.tick(true); }
-          else if (sec > 0) Sound.tick(false);
+          if (sec <= 5 && sec > 0) {
+            if (!T.hot) { T.hot = true; num.classList.add('low'); ring.classList.add('low'); danger.classList.add('on'); Sound.intensify(); }
+            Sound.heartbeat(); Sound.tick(true);
+          } else if (sec > 0) {
+            Sound.tick(false);
+            num.classList.remove('bump'); void num.offsetWidth; num.classList.add('bump');
+          }
         }
-        fill.style.transform = `scaleX(${Math.max(0, T.left / T.total)})`;
+        fill.style.transform = `scaleX(${f})`;
+        rtFg.style.strokeDashoffset = (RING_C * (1 - f)).toFixed(1);
+        setTimerColor(f);
         if (T.left <= 0) { timeUp(); return; }
       }
       T.last = now;
@@ -371,12 +455,22 @@
     }
     T.raf = requestAnimationFrame(frame);
   }
-  function stopTimer() { if (G.timer) cancelAnimationFrame(G.timer.raf); G.timer = null; }
+  function stopTimer() {
+    if (G.timer) cancelAnimationFrame(G.timer.raf);
+    G.timer = null;
+    danger.classList.remove('on'); $('#ringTimer').classList.remove('low');
+    Sound.stopMusic();
+  }
   const pauses = new Set();
-  function pauseTimer(why) { pauses.add(why || 'menu'); }
-  function resumeTimer(why) { pauses.delete(why || 'menu'); if (G.timer && !pauses.size) G.timer.last = performance.now(); }
+  function pauseTimer(why) { pauses.add(why || 'menu'); if (G.timer) Sound.duck(true); }
+  function resumeTimer(why) {
+    pauses.delete(why || 'menu');
+    if (G.timer && !pauses.size) { G.timer.last = performance.now(); if (!listening) Sound.duck(false); }
+  }
   function timeUp() {
     Sound.timeup();
+    const fl = document.createElement('div'); fl.className = 'timeup-flash'; fl.innerHTML = "<b>TIME'S UP!</b>";
+    document.body.appendChild(fl); setTimeout(() => fl.remove(), 1100);
     let val = input.value.trim();
     const fix = val && G.turn && E.suggest(G.turn.entries, val);
     if (fix) val = fix;
@@ -384,61 +478,100 @@
   }
 
   // ---------- voice input ----------
+  // Uses the browser's speech recognizer. One reusable instance, explicit error handling,
+  // music ducked while listening, and a keyboard-dictation fallback wherever the API fails.
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const micBtn = $('#micBtn');
-  let rec = null, listening = false;
-  if (!SR) micBtn.hidden = true;
+  let rec = null, listening = false, heard = false, voiceErr = null, voiceLang = 'en-US', voiceBroken = false;
   function titleCase(s) { return s.replace(/[.,!?]+$/g, '').trim().replace(/\b\w/g, c => c.toUpperCase()); }
   function bestFromSpeech(alts) {
     const t = G.turn;
-    // 1) any alternative, or any word-span inside it, that exactly matches a known answer (longest span wins)
     for (const alt of alts) {
       const words = alt.replace(/[.,!?]/g, '').split(/\s+/).filter(Boolean);
       for (let len = words.length; len >= 1; len--) {
         for (let s = 0; s + len <= words.length; s++) {
-          const span = words.slice(s, s + len).join(' ');
-          const e = E.findEntry(t.entries, span);
+          const e = E.findEntry(t.entries, words.slice(s, s + len).join(' '));
           if (e) return e.display;
         }
       }
     }
-    // 2) close to a known answer (autocorrect will tidy it on Lock)
     for (const alt of alts) if (E.suggest(t.entries, alt)) return titleCase(alt);
-    // 3) starts with the right letter
-    for (const alt of alts) if (E.startsWithLetter(alt, t.letter)) return titleCase(alt);
+    for (const alt of alts) {
+      // "um, banana" -> keep the part starting with the letter
+      const words = alt.split(/\s+/); const i = words.findIndex(w => E.startsWithLetter(w, t.letter));
+      if (i >= 0) return titleCase(words.slice(i).join(' '));
+    }
     return titleCase(alts[0] || '');
+  }
+  function dictationFallback(msg) {
+    voiceBroken = true;
+    input.focus();
+    toast(msg || 'Voice isn’t available in this browser. Tap the 🎤 on your keyboard to dictate instead.', 4200);
+  }
+  function setListening(on) {
+    listening = on;
+    micBtn.classList.toggle('listening', on);
+    micBtn.setAttribute('aria-pressed', on);
+    Sound.duck(on || pauses.size > 0);
+    if (on) input.placeholder = 'Listening… say your answer';
+    else if (G.turn) input.placeholder = `Starts with ${G.turn.letter}…`;
+  }
+  function makeRec() {
+    const r = new SR();
+    r.lang = voiceLang;
+    r.interimResults = true;
+    r.maxAlternatives = 5;
+    r.continuous = false;
+    r.onstart = () => { heard = false; voiceErr = null; setListening(true); };
+    r.onresult = ev => {
+      let finalAlts = null, interim = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const res = ev.results[i];
+        if (res.isFinal) finalAlts = Array.from(res).map(a => a.transcript.trim()).filter(Boolean);
+        else interim += res[0].transcript;
+      }
+      if (finalAlts && finalAlts.length) {
+        heard = true;
+        input.value = bestFromSpeech(finalAlts);
+        setAnswerState('lock');
+        Sound.mic();
+        try { r.stop(); } catch (e) {}
+      } else if (interim) input.value = titleCase(interim);
+    };
+    r.onerror = ev => { voiceErr = ev.error; };
+    r.onend = () => {
+      setListening(false);
+      const err = voiceErr; voiceErr = null;
+      if (!err) { if (!heard) toast("Didn't catch that. Tap the mic and try again."); return; }
+      if (err === 'aborted') return;
+      if (err === 'no-speech') return toast("Didn't hear anything. Tap the mic and speak right away.");
+      if (err === 'not-allowed') return toast('Microphone is blocked. Allow mic access for this site in your browser settings.', 4200);
+      if (err === 'audio-capture') return toast('No microphone found. Check that no other app is using it.', 3600);
+      if (err === 'language-not-supported' && voiceLang !== 'en') { voiceLang = 'en'; rec = null; return toast('Switched voice language. Tap the mic again.'); }
+      // network / service-not-allowed / anything else: the browser's speech service is unavailable here
+      rec = null;
+      dictationFallback(err === 'network'
+        ? 'Voice needs an internet connection. You can also tap the 🎤 on your keyboard to dictate.'
+        : 'Voice isn’t supported here (common in home-screen apps). Tap the 🎤 on your keyboard to dictate.');
+    };
+    return r;
   }
   function stopMic() {
     if (rec && listening) { try { rec.abort(); } catch (e) {} }
-    listening = false; micBtn.classList.remove('listening');
+    setListening(false);
   }
   micBtn.addEventListener('click', () => {
-    if (!SR) return;
+    if (!SR || voiceBroken) return dictationFallback();
     if (listening) { try { rec.stop(); } catch (e) {} return; }
-    rec = new SR();
-    rec.lang = navigator.language || 'en-US';
-    rec.interimResults = true;
-    rec.maxAlternatives = 6;
-    rec.continuous = false;
-    rec.onstart = () => { listening = true; micBtn.classList.add('listening'); input.placeholder = 'Listening…'; };
-    rec.onresult = ev => {
-      const res = ev.results[ev.results.length - 1];
-      if (res.isFinal) {
-        const alts = Array.from(res).map(a => a.transcript.trim()).filter(Boolean);
-        input.value = bestFromSpeech(alts);
-        setAnswerState('lock');
-        Sound.mic();
-      } else {
-        input.value = titleCase(res[0].transcript);
-      }
-    };
-    rec.onerror = ev => {
-      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') toast('Microphone is blocked. Allow it in your browser settings.', 3200);
-      else if (ev.error === 'no-speech') toast("Didn't catch that. Try again!");
-      else if (ev.error !== 'aborted') toast('Voice input hiccup. Try again or type it.');
-    };
-    rec.onend = () => { listening = false; micBtn.classList.remove('listening'); if (G.turn) input.placeholder = `Starts with ${G.turn.letter}…`; };
-    try { input.blur(); rec.start(); Sound.mic(); } catch (e) { toast('Voice input is not available right now.'); }
+    if (!rec) rec = makeRec();
+    input.blur();
+    try { rec.start(); }
+    catch (e) {
+      // InvalidStateError: a previous session is still closing; retry once with a fresh recognizer
+      try { rec.abort(); } catch (_) {}
+      rec = makeRec();
+      setTimeout(() => { try { rec.start(); } catch (_) { dictationFallback(); } }, 300);
+    }
   });
 
   // ---------- submit & reveal ----------
@@ -449,7 +582,7 @@
     stopTimer(); stopMic();
     input.blur();
     const p = current(), t = G.turn;
-    const verdict = E.judge(t.entries, t.letter, val);
+    const verdict = E.judge(t.entries, t.letter, val, settings.judge === 'strict');
     if (timedOut && verdict.kind === 'blank') verdict.timeout = true;
     await reveal(p, t, val, verdict, timeLeft, T.total);
   }
@@ -475,7 +608,8 @@
     $('#vote').hidden = true;
     const next = $('#nextBtn'); next.disabled = true; next.textContent = 'Next';
     show('reveal');
-    await sleep(650);
+    Sound.drumroll(700);
+    await sleep(750);
 
     const slots = $$('#board .slot');
     const open = (i, hit) => { slots[i].classList.add('open'); if (hit) slots[i].classList.add('hit'); Sound.flip(); };
@@ -484,7 +618,7 @@
     if (v.kind === 'board') {
       open(v.rank, true);
       await sleep(480);
-      Sound.ding();
+      if (v.rank === 0) Sound.top(); else Sound.ding();
       FX.at(slots[v.rank], v.rank === 0 ? 110 : 70, { speed: v.rank === 0 ? 13 : 10 });
     } else if (v.kind === 'valid') {
       Sound.ok();
@@ -525,6 +659,7 @@
     if (v.kind === 'board') { title = v.rank === 0 ? 'TOP ANSWER!' : `#${v.rank + 1} ON THE BOARD!`; cls = 'good'; }
     else if (v.kind === 'valid') { title = 'GOOD ANSWER!'; cls = 'ok'; }
     else if (v.kind === 'vote') { title = accepted ? 'THE TABLE ALLOWS IT!' : 'THE TABLE SAYS NO'; cls = accepted ? 'ok' : 'bad'; }
+    else if (v.kind === 'unlisted') { title = 'NOT ON OUR LIST'; cls = 'bad'; }
     else if (v.kind === 'wrongLetter') { title = `NOT A${'AEFHILMNORSX'.includes(t.letter) ? 'N' : ''} ${t.letter} WORD`; cls = 'bad'; }
     else { title = v.timeout ? "TIME'S UP!" : 'NO ANSWER'; cls = 'bad'; }
     const chips = [];

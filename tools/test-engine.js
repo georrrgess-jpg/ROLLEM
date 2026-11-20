@@ -56,7 +56,16 @@ ok(collisions === 0, collisions + ' key collisions');
 console.log(`die letters (${bank.dieLetters.length}): ${bank.dieLetters.join('')}`);
 console.log('prompts per letter: ' + bank.dieLetters.map(l => l + bank.byLetter[l].length).join(' '));
 // simulate many turns
-const used = new Set();
-for (let i = 0; i < 2000; i++) { const t = E.pickTurn(bank, used); ok(t.entries.length >= 5, 'turn has board'); }
+ok(E.judge(entries, 'A', 'Ambrosia', true).kind === 'unlisted', 'strict mode: unlisted');
+// repetition: over 30 consecutive turns no category may repeat, and no letter twice in a row too often
+const h = E.newHistory(); const seenCats = []; let sameLetter = 0, prev = null, catRepeats = 0;
+for (let i = 0; i < 3000; i++) {
+  const t = E.pickTurn(bank, h); ok(t.entries.length >= 5, 'turn has board');
+  if (seenCats.slice(-25).includes(t.cat.id)) catRepeats++;
+  if (t.letter === prev) sameLetter++;
+  prev = t.letter; seenCats.push(t.cat.id); E.recordTurn(h, t);
+}
+console.log(`category repeats within 25 turns: ${catRepeats}/3000, same letter twice in a row: ${sameLetter}/3000`);
+ok(catRepeats < 60, 'categories rarely repeat');
 console.log(fails ? `${fails} FAILURES` : 'all tests passed');
 process.exit(fails ? 1 : 0);
