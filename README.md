@@ -38,7 +38,8 @@ js/engine.js          pure game logic: matching, autocorrect, scoring, prompt pi
 js/app.js             screen flow / UI controller
 js/audio.js           synthesized sound effects, adaptive tension music and haptics (no audio files)
 js/fx.js              confetti and particle canvas
-js/data/*.js          prompt packs (70 categories)
+js/die3d.js           WebGL rounded-cube die (CSS cube fallback)
+js/data/*.js          prompt packs (101 categories)
 tools/validate-data.js  checks prompt packs
 tools/test-engine.js    engine unit tests and data cross-checks
 tools/smoke.js          headless full-game playthrough with screenshots
