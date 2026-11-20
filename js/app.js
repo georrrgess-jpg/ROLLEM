@@ -2,7 +2,16 @@
 (function () {
   'use strict';
   const E = window.RollemEngine;
-  const bank = E.buildBank(window.ROLLEM_DATA);
+  const MODES = window.ROLLEM_MODES || [{ id: 'all', name: 'Unlimited', icon: '🎲', desc: '' }];
+  const topicOf = c => c.topic || (window.ROLLEM_TOPIC || {})[c.id] || 'misc';
+  function catsForMode(mode, rating) {
+    return window.ROLLEM_DATA.filter(c => {
+      const t = topicOf(c);
+      if (mode === 'all') return rating === 'family' ? t !== 'after_dark' : true;
+      return t === mode;
+    });
+  }
+  let bank = E.buildBank(window.ROLLEM_DATA);
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -19,7 +28,8 @@
     get(k, d) { try { const v = localStorage.getItem('rollem.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('rollem.' + k, JSON.stringify(v)); } catch (e) {} }
   };
-  const settings = Object.assign({ timer: 20, rounds: 5, mult: 2, judge: 'vote' }, store.get('settings', {}));
+  const settings = Object.assign({ timer: 20, rounds: 5, mult: 2, judge: 'vote', mode: 'all', rating: 'pg13', theme: 'midnight', dice: 'classic' }, store.get('settings', {}));
+  if (window.RollemLooks) { RollemLooks.applyTheme(settings.theme); RollemLooks.applyDice(settings.dice); }
 
   // Low-end / reduced-motion devices get a lighter effects budget (fewer particles, no extra filters).
   const LITE = (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4) ||
@@ -105,7 +115,49 @@
   $('#menuSound').addEventListener('click', toggleSound);
 
   // ---------- HOME ----------
-  $('#playBtn').addEventListener('click', () => { Sound.select(); renderSetup(); show('setup'); });
+  $('#playBtn').addEventListener('click', () => { Sound.select(); renderModes(); show('modes'); });
+  $('#customBtn').addEventListener('click', () => { Sound.select(); renderCustom(); show('custom'); });
+
+  // ---------- MODES ----------
+  const modeOf = id => MODES.find(m => m.id === id) || MODES[0];
+  function renderModes() {
+    $('#modeList').innerHTML = MODES.map((m, i) => {
+      const n = catsForMode(m.id, m.id === 'all' ? settings.rating : 'pg13').length;
+      return `<button class="mode-card ${m.id === 'all' ? 'featured' : ''}" data-mode="${m.id}" style="animation-delay:${i * 35}ms">
+        <span class="m-icon" aria-hidden="true">${m.icon}</span>
+        <span class="m-text"><span class="m-name">${esc(m.name)}${m.badge ? `<span class="badge">${m.badge}</span>` : ''}</span>
+        <span class="m-desc">${esc(m.desc)}</span><span class="m-count">${n} categories</span></span>
+      </button>`;
+    }).join('');
+  }
+  $('#modeList').addEventListener('click', e => {
+    const b = e.target.closest('[data-mode]'); if (!b) return;
+    settings.mode = b.dataset.mode; store.set('settings', settings);
+    Sound.select(); renderSetup(); show('setup');
+  });
+
+  // ---------- CUSTOMIZE ----------
+  let glCustom = null;
+  function renderCustom() {
+    const L = window.RollemLooks; if (!L) return;
+    if (!glCustom && window.Die3D) { glCustom = Die3D($('#customAir'), { maxDpr: LITE ? 1.25 : 2 }); if (glCustom.ok) glCustom.setFaces(['A', 'B', 'C', 'R', 'E', 'M']); }
+    $('#diceGrid').innerHTML = L.DICE.map(d => `<button class="swatch" role="radio" aria-checked="${d.id === settings.dice}" data-dice="${d.id}">
+      <span class="die-chip" style="background:linear-gradient(145deg, ${L.hex(d.base.map(v => Math.min(1, v * 1.15)))}, ${L.hex(d.base2 || d.base)});color:${L.hex(d.ink)}">A</span><span>${d.name}</span></button>`).join('');
+    $('#themeGrid').innerHTML = L.THEMES.map(t => `<button class="swatch" role="radio" aria-checked="${t.id === settings.theme}" data-theme="${t.id}">
+      <span class="theme-chip" style="background:radial-gradient(70% 90% at 25% 20%, rgba(${t.o1}), transparent 70%), radial-gradient(70% 90% at 85% 90%, rgba(${t.o2}), transparent 70%), linear-gradient(180deg, ${t.hi}, ${t.bg0})"></span><span>${t.name}</span></button>`).join('');
+    $('#diceName').textContent = (L.DICE.find(d => d.id === settings.dice) || L.DICE[0]).name;
+    $('#themeName').textContent = (L.THEMES.find(t => t.id === settings.theme) || L.THEMES[0]).name;
+  }
+  $('#diceGrid').addEventListener('click', e => {
+    const b = e.target.closest('[data-dice]'); if (!b) return;
+    settings.dice = b.dataset.dice; store.set('settings', settings);
+    RollemLooks.applyDice(settings.dice); Sound.select(); renderCustom();
+  });
+  $('#themeGrid').addEventListener('click', e => {
+    const b = e.target.closest('[data-theme]'); if (!b) return;
+    settings.theme = b.dataset.theme; store.set('settings', settings);
+    RollemLooks.applyTheme(settings.theme); Sound.select(); renderCustom();
+  });
   $('#howBtn').addEventListener('click', () => { Sound.tap(); openModal('#howModal'); });
   $$('[data-back]').forEach(b => b.addEventListener('click', () => { Sound.tap(); show(b.dataset.back); }));
 
@@ -177,6 +229,10 @@
     renderChips($('#roundChips'), ROUNDS, settings.rounds, v => String(v), 'rounds');
     renderChips($('#multChips'), MULTS, settings.mult, v => (v === 2 ? '2× Double' : '3× Triple'), 'mult');
     renderChips($('#judgeChips'), ['vote', 'strict'], settings.judge, v => (v === 'vote' ? 'Player judges' : 'Strict: list only'), 'judge');
+    renderChips($('#ratingChips'), ['pg13', 'family'], settings.rating, v => (v === 'pg13' ? 'PG-13' : 'Family'), 'rating');
+    const m = modeOf(settings.mode);
+    $('#setupMode').innerHTML = `<span aria-hidden="true">${m.icon}</span>${esc(m.name)}${m.badge ? `<span class="badge">${m.badge}</span>` : ''}`;
+    $('#contentPanel').hidden = settings.mode !== 'all';
     renderJudgeHint();
     $('#setupError').textContent = '';
   }
@@ -190,6 +246,8 @@
 
   // ---------- GAME FLOW ----------
   function newGame(names) {
+    const pool = catsForMode(settings.mode, settings.rating);
+    bank = E.buildBank(pool.length ? pool : window.ROLLEM_DATA);
     G.players = names.map((name, i) => ({ name, color: COLORS[i % COLORS.length], score: 0, rerolls: 1, streak: 0, hits: 0, tops: 0 }));
     G.round = 1; G.used = new Set(); G.log = []; G.salt = Math.floor(Math.random() * 1e9);
     document.body.classList.remove('final-mode');
@@ -220,7 +278,8 @@
   function hud(scope) {
     const p = current();
     scope.querySelectorAll('[data-round]').forEach(el => {
-      el.innerHTML = isFinal() ? `<b>Final round · ${settings.mult}×</b>` : `Round <b>${G.round}</b> of ${settings.rounds}`;
+      el.innerHTML = (isFinal() ? `<b>Final round · ${settings.mult}×</b>` : `Round <b>${G.round}</b> of ${settings.rounds}`) +
+        `<span class="hud-mode">${modeOf(settings.mode).icon} ${esc(modeOf(settings.mode).name)}</span>`;
     });
     scope.querySelectorAll('[data-myscore]').forEach(el => (el.textContent = p.score + ' pts'));
   }
@@ -252,7 +311,7 @@
     if (perfN >= 45) {
       if (perfSum / perfN > 24) {
         degraded = true;
-        [glRoll, glHero].forEach(d => d.ok && d.setMaxDpr(1));
+        [glRoll, glHero, glCustom].forEach(d => d && d.ok && d.setMaxDpr(1));
         document.body.classList.add('lite');
       }
       perfSum = 0; perfN = 0;
@@ -262,6 +321,7 @@
     requestAnimationFrame(dieLoop);
     if (document.hidden || !active) { perfLast = 0; return; }
     if (active.id === 'home' || active.id === 'roll') watchPerf(now); else perfLast = 0;
+    if (active.id === 'custom' && glCustom && glCustom.ok) { glCustom.setPose(0.44 + 0.05 * Math.sin(now / 900), now / 1400); glCustom.draw(); }
     if (active.id === 'home' && glHero.ok) { glHero.setPose(0.44 + 0.05 * Math.sin(now / 900), now / 1600); glHero.draw(); }
     if (active.id === 'roll' && glRoll.ok) {
       if (spinAnim) {
@@ -419,6 +479,18 @@
     fixNote.innerHTML = note || '';
     if (state === 'lock') input.classList.remove('fixed');
   }
+
+  // Tapping a button while the keyboard is open normally blurs the input first; the keyboard closes,
+  // the layout shifts and the tap misses. Prevent the blur and act on pointerup instead -> one tap submits.
+  function oneTap(btn, action) {
+    let armed = false;
+    btn.addEventListener('pointerdown', e => { if (document.activeElement === input) { e.preventDefault(); armed = true; } });
+    btn.addEventListener('pointerup', e => { if (!armed) return; armed = false; e.preventDefault(); btn.dataset.skipClick = '1'; action(); });
+    btn.addEventListener('pointercancel', () => (armed = false));
+    btn.addEventListener('click', e => { if (btn.dataset.skipClick) { delete btn.dataset.skipClick; e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  }
+  const submitForm = () => { const f = $('#answerForm'); if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true })); };
+  oneTap(lockBtn, submitForm);
 
   input.addEventListener('input', () => {
     if (G.answerState === 'submit') setAnswerState('lock');
@@ -780,6 +852,8 @@
     const nextFinal = G.round + 1 === settings.rounds;
     $('#standTitle').textContent = `After round ${G.round}`;
     $('#standNext').textContent = nextFinal ? `Final round · ${settings.mult}×` : `Round ${G.round + 1}`;
+    const firstNext = G.players[G.round % G.players.length];
+    $('#standSub').innerHTML = `Next up: <b>${esc(firstNext.name)}</b> rolls first${nextFinal ? ' · every point counts ' + settings.mult + '×' : ''}`;
     const list = $('#standList');
     const rankOf = sc => 1 + now.filter(x => x.p.score > sc).length;
     list.innerHTML = now.map(({ p, i }, r) => {
@@ -852,6 +926,10 @@
 
   // ---------- menu ----------
   $$('[data-menu]').forEach(b => b.addEventListener('click', () => { Sound.tap(); pauseTimer('menu'); openModal('#menuModal'); }));
+  function abortGame() { closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear(); document.body.classList.remove('final-mode'); }
+  $('#restartBtn').addEventListener('click', () => { Sound.select(); abortGame(); newGame(G.players.map(p => p.name)); });
+  $('#changeModeBtn').addEventListener('click', () => { Sound.tap(); abortGame(); renderModes(); show('modes'); });
+  $('#modeAgainBtn').addEventListener('click', () => { Sound.tap(); FX.clear(); renderModes(); show('modes'); });
   $('#quitBtn').addEventListener('click', () => {
     Sound.tap(); closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear();
     document.body.classList.remove('final-mode'); show('home');
@@ -880,7 +958,10 @@
     window.addEventListener('orientationchange', () => setTimeout(() => { fullH = vv.height; fitViewport(); }, 400));
   }
   input.addEventListener('focus', () => { document.body.classList.add('kb'); setTimeout(() => { window.scrollTo(0, 0); fitViewport(); }, 60); });
-  input.addEventListener('blur', () => { document.body.classList.remove('kb'); setTimeout(fitViewport, 60); });
+  input.addEventListener('blur', () => {
+    // delay the layout change so a tap that caused the blur still lands on the button it was aimed at
+    setTimeout(() => { if (document.activeElement !== input) document.body.classList.remove('kb'); fitViewport(); }, 260);
+  });
 
   // ---------- boot ----------
   renderSound();

@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await p.goto('http://localhost:8765/index.html');
-  await p.click('#playBtn', { force: true }); await p.click('#startBtn'); await p.waitForSelector('#roll.active'); await p.waitForTimeout(600);
+  await p.click('#playBtn', { force: true }); await p.waitForTimeout(400); await p.click('[data-mode="all"]'); await p.click('#startBtn'); await p.waitForSelector('#roll.active'); await p.waitForTimeout(600);
   const cdp = await p.context().newCDPSession(p);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate });
   for (const label of ['roll', 'answer-timer']) {

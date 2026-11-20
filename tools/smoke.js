@@ -15,7 +15,7 @@ const sizes = [['small', 320, 568], ['typical', 390, 844], ['tall', 430, 932]];
     await p.reload(); await p.waitForTimeout(1200);
     const shot = s => p.screenshot({ path: `${out}/${name}-${s}.png` });
     await shot('1-home');
-    await p.click('#playBtn', { force: true }); await p.waitForTimeout(500);
+    await p.click('#playBtn', { force: true }); await p.waitForTimeout(400); await p.click('[data-mode="all"]'); await p.waitForTimeout(500);
     await p.fill('#playerList input >> nth=0', 'Alexandria');
     await p.fill('#playerList input >> nth=1', 'Bo');
     await p.click('#addPlayer'); await p.fill('#playerList input >> nth=2', 'Christopher the Great');

@@ -18,15 +18,20 @@
     c.clearRect(0, 0, ATLAS, ATLAS);
     c.fillStyle = '#fff';
     c.textAlign = 'center';
-    c.textBaseline = 'middle';
     c.font = `${Math.round(cell * 0.66)}px ${fontFamily}`;
+    // Measure every glyph with the SAME baseline so each letter is centered identically
+    // (previously "A" was measured before the baseline switched and sat off-center).
+    c.textBaseline = 'alphabetic';
+    const probe = c.measureText('A');
+    const hasBounds = probe.actualBoundingBoxAscent != null && probe.actualBoundingBoxAscent > 0;
+    if (!hasBounds) c.textBaseline = 'middle';
     for (let i = 0; i < CHARS.length; i++) {
       const x = (i % GRID) * cell + cell / 2, y = Math.floor(i / GRID) * cell + cell / 2;
-      const m = c.measureText(CHARS[i]);
-      // center optically using actual glyph bounds when available
-      const dy = m.actualBoundingBoxAscent != null ? (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2 : 0;
-      c.textBaseline = m.actualBoundingBoxAscent != null ? 'alphabetic' : 'middle';
-      c.fillText(CHARS[i], x, m.actualBoundingBoxAscent != null ? y + dy : y);
+      if (hasBounds) {
+        const m = c.measureText(CHARS[i]);
+        const dy = (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+        c.fillText(CHARS[i], x, y + dy);
+      } else c.fillText(CHARS[i], x, y);
     }
     return atlasCanvas;
   }
@@ -71,12 +76,14 @@
     return { pos: new Float32Array(pos), nrm: new Float32Array(nrm), uv: new Float32Array(uv), face: new Float32Array(face), flat: new Float32Array(flat), idx: new Uint16Array(idx) };
   }
   let MESH = null;
+  const DEFAULT_DESIGN = { base: [0.99, 0.965, 0.915], ink: [0.85, 0.08, 0.38], spec: 0.6, shin: 56 };
 
   const VS = `
 attribute vec3 aPos; attribute vec3 aNrm; attribute vec2 aUv; attribute float aFace; attribute float aFlat;
 uniform mat3 uRot; uniform float uF, uAspect, uDist; uniform float uL[6];
-varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront;
+varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront; varying vec3 vObj;
 void main() {
+  vObj = aPos;
   vec3 p = uRot * aPos;
   vN = uRot * aNrm;
   int fi = int(aFace + 0.5);
@@ -90,35 +97,50 @@ void main() {
   const FS = `
 precision mediump float;
 uniform sampler2D uTex; uniform float uGlow;
-varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront;
+uniform vec3 uBase, uBase2, uInk; uniform float uSpec, uShin, uPat, uInkGlow, uMetal;
+varying vec3 vN; varying vec2 vUv; varying vec2 vCell; varying float vFlat; varying float vFront; varying vec3 vObj;
 float glyph(vec2 uv) {
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
   return texture2D(uTex, (vCell + vec2(uv.x, 1.0 - uv.y)) / 6.0).a;
+}
+float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+vec3 surface(vec3 p) {
+  if (uPat < 0.5) return uBase;
+  if (uPat < 1.5) {               // marble veins
+    float n = sin(p.x * 3.6 + sin(p.y * 2.9 + sin(p.z * 2.3) * 1.7) * 2.4 + p.z * 1.4);
+    return mix(uBase, uBase2, smoothstep(0.78, 1.0, abs(n)) * 0.8);
+  }
+  if (uPat < 2.5) {               // wood grain rings
+    float r = length(p.xz * vec2(1.0, 0.55) + vec2(0.9, 0.4)) * 6.5 + sin(p.y * 2.2) * 0.45 + sin(p.x * 11.0 + p.y * 3.0) * 0.04;
+    return mix(uBase, uBase2, smoothstep(0.15, 0.85, abs(fract(r) - 0.5) * 2.0));
+  }
+  vec3 neb = mix(uBase, uBase2, 0.5 + 0.5 * sin(p.x * 2.2 + p.y * 1.7 - p.z * 1.3));  // galaxy
+  vec3 c = fract(p * 24.0) - 0.5;
+  float star = step(0.965, hash(floor(p * 24.0))) * smoothstep(0.32, 0.0, length(c));
+  return neb + vec3(star);
 }
 void main() {
   vec3 N = normalize(vN);
   vec3 Ld = normalize(vec3(-0.45, 0.8, 0.65));
   float onFace = smoothstep(0.985, 1.0, vFlat);
   float a  = glyph(vUv) * onFace;
-  float aT = glyph(vUv + vec2(-0.012, 0.016)) * onFace;   // toward the light
-  float aB = glyph(vUv + vec2(0.012, -0.016)) * onFace;   // away from the light
+  float aT = glyph(vUv + vec2(-0.012, 0.016)) * onFace;
+  float aB = glyph(vUv + vec2(0.012, -0.016)) * onFace;
   float glow = uGlow * vFront;
-  vec3 ivory = vec3(0.99, 0.965, 0.915);
-  vec3 ink = mix(vec3(0.85, 0.08, 0.38), vec3(1.0, 0.62, 0.05), glow);
-  vec3 base = mix(ivory, ink, a);
-  base *= 1.0 - 0.45 * a * (1.0 - aT);          // engraved: shadowed upper edge inside the cut
-  base += vec3(0.25) * a * (1.0 - aB);          // lit lower edge inside the cut
+  vec3 ink = mix(uInk, vec3(1.0, 0.62, 0.05), glow);
+  vec3 base = mix(surface(vObj), ink, a);
+  base *= 1.0 - 0.45 * a * (1.0 - aT);
+  base += vec3(0.22) * a * (1.0 - aB);
   float diff = max(dot(N, Ld), 0.0);
   float hemi = 0.5 + 0.5 * N.y;
   vec3 H = normalize(Ld + vec3(0.0, 0.0, 1.0));
-  float spec = pow(max(dot(N, H), 0.0), 56.0) * (1.0 - 0.7 * a);
-  float edge = smoothstep(0.7, 1.0, vFlat);
-  float ao = mix(0.86, 1.0, edge);
+  float spec = pow(max(dot(N, H), 0.0), uShin) * uSpec * (1.0 - 0.7 * a);
+  float ao = mix(0.86, 1.0, smoothstep(0.7, 1.0, vFlat));
   float rim = pow(1.0 - max(N.z, 0.0), 3.0);
   vec3 col = base * (0.3 + 0.58 * diff + 0.22 * hemi) * ao;
-  col += vec3(1.0) * spec * 0.6;
-  col += vec3(1.0, 0.45, 0.75) * rim * 0.16;
-  col += ink * glow * a * 0.45;
+  col += mix(vec3(1.0), uBase * 1.4, uMetal) * spec;
+  col += vec3(1.0, 0.45, 0.75) * rim * 0.14;
+  col += ink * (glow * 0.45 + uInkGlow + 0.2) * a;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -157,13 +179,13 @@ void main() {
       buf(MESH.pos, 'aPos', 3); buf(MESH.nrm, 'aNrm', 3); buf(MESH.uv, 'aUv', 2); buf(MESH.face, 'aFace', 1); buf(MESH.flat, 'aFlat', 1);
       const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, MESH.idx, gl.STATIC_DRAW);
       count = MESH.idx.length;
-      ['uRot', 'uF', 'uAspect', 'uDist', 'uL', 'uTex', 'uGlow'].forEach(n => (loc[n] = gl.getUniformLocation(prog, n)));
+      ['uRot', 'uF', 'uAspect', 'uDist', 'uL', 'uTex', 'uGlow', 'uBase', 'uBase2', 'uInk', 'uSpec', 'uShin', 'uPat', 'uInkGlow', 'uMetal'].forEach(n => (loc[n] = gl.getUniformLocation(prog, n)));
       tex = gl.createTexture();
       gl.enable(gl.DEPTH_TEST);
       gl.clearColor(0, 0, 0, 0);
     } catch (e) { console.warn('Die3D fallback:', e.message); return { ok: false }; }
 
-    const st = { x: 0.4, y: -0.55, glow: 0, letters: [0, 1, 2, 3, 4, 5], dirty: true, w: 0, h: 0 };
+    const st = { x: 0.4, y: -0.55, glow: 0, letters: [0, 1, 2, 3, 4, 5], dirty: true, w: 0, h: 0, design: Die3D.current };
     function upload() {
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -188,6 +210,7 @@ void main() {
     const api = {
       ok: true, canvas: cv,
       setPose(x, y) { if (x !== st.x || y !== st.y) { st.x = x; st.y = y; st.dirty = true; } },
+      setDesign(d) { st.design = d; st.dirty = true; },
       setMaxDpr(d) { opts.maxDpr = d; st.dirty = true; },
       setGlow(g) { if (g !== st.glow) { st.glow = g; st.dirty = true; } },
       setFace(i, ch) { const k = Math.max(0, CHARS.indexOf(String(ch).toUpperCase())); if (st.letters[i] !== k) { st.letters[i] = k; st.dirty = true; } },
@@ -207,6 +230,10 @@ void main() {
         gl.uniform1fv(loc.uL, new Float32Array(st.letters));
         gl.uniform1f(loc.uGlow, st.glow);
         gl.uniform1i(loc.uTex, 0);
+        const d = st.design || DEFAULT_DESIGN;
+        gl.uniform3fv(loc.uBase, d.base); gl.uniform3fv(loc.uBase2, d.base2 || d.base); gl.uniform3fv(loc.uInk, d.ink);
+        gl.uniform1f(loc.uSpec, d.spec == null ? 0.6 : d.spec); gl.uniform1f(loc.uShin, d.shin || 56);
+        gl.uniform1f(loc.uPat, d.pat || 0); gl.uniform1f(loc.uInkGlow, d.glow || 0); gl.uniform1f(loc.uMetal, d.metal || 0);
         gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);
       }
     };
@@ -225,5 +252,7 @@ void main() {
       instances.forEach(i => i.ok && i.refresh());
     }).catch(() => {});
   }
+  Die3D.current = null;
+  Die3D.setDesignAll = d => { Die3D.current = d; instances.forEach(i => i.ok && i.setDesign(d)); };
   window.Die3D = Die3D;
 })();

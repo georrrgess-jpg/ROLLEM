@@ -52,20 +52,58 @@
         <button class="btn btn-primary btn-xl btn-shine btn-pulse" id="playBtn">Play</button>
         <div class="home-sub">
           <button class="btn btn-ghost" id="howBtn">How to play</button>
+          <button class="btn btn-ghost" id="customBtn">🎨 Customize</button>
         </div>
       </div>
+    </section>
+
+    <!-- MODES -->
+    <section class="screen" id="modes" data-screen>
+      <header class="topbar">
+        <button class="icon-btn" data-back="home" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg></button>
+        <h2 class="topbar-title">Choose a mode</h2>
+        <span class="icon-btn-spacer"></span>
+      </header>
+      <div class="scroll"><div class="mode-list" id="modeList"></div></div>
+    </section>
+
+    <!-- CUSTOMIZE -->
+    <section class="screen" id="custom" data-screen>
+      <header class="topbar">
+        <button class="icon-btn" data-back="home" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg></button>
+        <h2 class="topbar-title">Customize</h2>
+        <span class="icon-btn-spacer"></span>
+      </header>
+      <div class="scroll">
+        <div class="custom-preview">
+          <div class="hero-die" aria-hidden="true">
+            <div class="die-shadow"></div>
+            <div class="die-air" id="customAir"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Dice design</h3><span class="muted" id="diceName"></span></div>
+          <div class="swatch-grid" id="diceGrid" role="radiogroup" aria-label="Dice design"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Menu theme</h3><span class="muted" id="themeName"></span></div>
+          <div class="swatch-grid" id="themeGrid" role="radiogroup" aria-label="Menu theme"></div>
+        </div>
+      </div>
+      <footer class="bottombar"><button class="btn btn-primary btn-xl" data-back="home">Done</button></footer>
     </section>
 
     <!-- SETUP -->
     <section class="screen" id="setup" data-screen>
       <header class="topbar">
-        <button class="icon-btn" data-back="home" aria-label="Back">
+        <button class="icon-btn" data-back="modes" aria-label="Back">
           <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
         </button>
         <h2 class="topbar-title">Game setup</h2>
         <span class="icon-btn-spacer"></span>
       </header>
       <div class="scroll fade">
+        <div class="mode-chip"><span class="mc-name" id="setupMode"></span><button class="chip-btn" data-back="modes">Change</button></div>
         <div class="panel">
           <div class="panel-head"><h3>Players</h3><span class="muted" id="playerCount"></span></div>
           <ul class="player-list" id="playerList"></ul>
@@ -88,6 +126,11 @@
           <div class="panel-head"><h3>Answers not on our list</h3></div>
           <div class="chips two" id="judgeChips" role="radiogroup" aria-label="Answers not on our list"></div>
           <p class="hint" id="judgeHint"></p>
+        </div>
+        <div class="panel" id="contentPanel">
+          <div class="panel-head"><h3>Unlimited content</h3></div>
+          <div class="chips two" id="ratingChips" role="radiogroup" aria-label="Content rating"></div>
+          <p class="hint">PG-13 mixes the After Dark prompts (bars, dating, bad habits) into Unlimited.</p>
         </div>
       </div>
       <footer class="bottombar">
@@ -185,6 +228,7 @@
       <header class="topbar center">
         <h2 class="topbar-title" id="standTitle">Standings</h2>
       </header>
+      <p class="stand-sub" id="standSub"></p>
       <div class="scroll">
         <ol class="standings" id="standList"></ol>
       </div>
@@ -202,8 +246,9 @@
         <ol class="standings compact" id="restList"></ol>
         <div class="awards" id="awards"></div>
       </div>
-      <footer class="bottombar row">
+      <footer class="bottombar row3">
         <button class="btn btn-ghost" id="homeBtn">Home</button>
+        <button class="btn btn-ghost" id="modeAgainBtn">Modes</button>
         <button class="btn btn-primary" id="rematchBtn">Rematch</button>
       </footer>
     </section>
@@ -224,6 +269,7 @@
       <button class="btn btn-primary" data-close>Resume</button>
       <button class="btn btn-ghost" id="menuSound"></button>
       <button class="btn btn-ghost" id="menuMusic"></button>
+      <div class="row2"><button class="btn btn-ghost" id="restartBtn">Restart</button><button class="btn btn-ghost" id="changeModeBtn">Change mode</button></div>
       <button class="btn btn-danger" id="quitBtn">Quit to home</button>
     </div>
   </div>
@@ -256,6 +302,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/data/_init.js"></script>
+  <script src="js/data/_topics.js"></script>
   <script src="js/data/food.js"></script>
   <script src="js/data/nature.js"></script>
   <script src="js/data/people.js"></script>
@@ -270,6 +317,7 @@
   <script src="js/audio.js"></script>
   <script src="js/fx.js"></script>
   <script src="js/die3d.js"></script>
+  <script src="js/themes.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
