@@ -967,8 +967,8 @@
     G.fo = { bot: a, top: b, phase: 'ready', early: {}, lockUntil: {}, answering: null, first: null, second: null, goAt: 0, banner: '' };
     foSetPlayer('bot', a); foSetPlayer('top', b);
     $$('#faceoff .buzz').forEach(x => x.classList.remove('locked'));
-    $('#foTile').textContent = '?'; $('#foTile').className = 'fo-tile';
-    $('#foPromptTop').textContent = $('#foPromptBot').textContent = 'Fingers on the buzzers…';
+    $$('#faceoff .fo-tile').forEach(x => { x.textContent = '?'; x.className = 'fo-tile'; });
+    $('#foPromptTop').textContent = $('#foPromptBot').textContent = 'Get ready…';
     $('#foPromptTop').classList.remove('show'); $('#foPromptBot').classList.remove('show');
     $('#foCount').textContent = '';
     foScreen.classList.add('waiting'); foScreen.classList.remove('live');
@@ -977,8 +977,8 @@
     foLater(() => {
       if (!G.fo || G.fo.phase !== 'ready') return;
       Sound.drumroll(1400);
-      const tile = $('#foTile'); tile.classList.add('spin');
-      const iv = setInterval(() => { tile.textContent = randLetter(); Sound.rattle(); }, 85);
+      const tiles = $$('#faceoff .fo-tile'); tiles.forEach(x => x.classList.add('spin'));
+      const iv = setInterval(() => { const l = randLetter(); tiles.forEach(x => (x.textContent = l)); Sound.rattle(); }, 85);
       foTimers.push(iv);
       foLater(() => { clearInterval(iv); foGo(); }, 1400 + Math.random() * 1400);
     }, 700);
@@ -986,8 +986,9 @@
   function foGo() {
     const fo = G.fo; if (!fo || fo.phase !== 'ready') return;
     const t = G.turn;
-    const tile = $('#foTile'); tile.classList.remove('spin'); tile.textContent = t.letter;
-    tile.classList.remove('land'); void tile.offsetWidth; tile.classList.add('land');
+    $$('#faceoff .fo-tile').forEach(tile => {
+      tile.classList.remove('spin', 'land'); tile.textContent = t.letter; void tile.offsetWidth; tile.classList.add('land');
+    });
     $('#foPromptTop').textContent = $('#foPromptBot').textContent = t.cat.prompt;
     $('#foPromptTop').classList.add('show'); $('#foPromptBot').classList.add('show');
     fo.phase = 'live'; fo.goAt = performance.now();
