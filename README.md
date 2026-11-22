@@ -16,6 +16,9 @@ ROLL'EM is a pass-and-play party word game for 2–12 players on one phone. It m
 ## Customize
 Choose from 12 menu themes and 13 dice designs (Classic, Ruby, Onyx, Gold, Sapphire, Mint, Bubblegum, Marble, Wood, Neon, Galaxy, Lava, Lakers). Each player can also pick their own dice from the dice button on their row in setup; it's used on their turns.
 
+## Game styles
+**Classic**: take turns rolling your own letter. **⚡ Face-Off**: two players share the phone, one at each end; the letter lands, first to buzz answers. A #1 answer wins outright; a lower board answer lets the rival steal with a higher one; a missed buzz costs 5 points; the winner gets +15. Turn order can rotate each round or stay the same.
+
 ## Scoring
 | Result | Points |
 |---|---|
@@ -45,7 +48,7 @@ js/app.js             screen flow / UI controller
 js/audio.js           synthesized sound effects, adaptive tension music and haptics (no audio files)
 js/fx.js              confetti and particle canvas
 js/die3d.js           WebGL rounded-cube die (CSS cube fallback)
-js/data/*.js          prompt packs (250 categories)
+js/data/*.js          prompt packs (270 categories)
 js/topics.js          game modes and the topic of each category
 js/themes.js          12 menu themes and 12 dice designs
 tools/validate-data.js  checks prompt packs
