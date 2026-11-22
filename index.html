@@ -105,9 +105,19 @@
       <div class="scroll fade">
         <div class="mode-chip"><span class="mc-name" id="setupMode"></span><button class="chip-btn" data-back="modes">Change</button></div>
         <div class="panel">
+          <div class="panel-head"><h3>Game style</h3></div>
+          <div class="chips two" id="styleChips" role="radiogroup" aria-label="Game style"></div>
+          <p class="hint" id="styleHint"></p>
+        </div>
+        <div class="panel">
           <div class="panel-head"><h3>Players</h3><span class="muted" id="playerCount"></span></div>
           <ul class="player-list" id="playerList"></ul>
           <button class="btn btn-dashed" id="addPlayer">+ Add player</button>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Turn order</h3></div>
+          <div class="chips two" id="orderChips" role="radiogroup" aria-label="Turn order"></div>
+          <p class="hint" id="orderHint"></p>
         </div>
         <div class="panel">
           <div class="panel-head"><h3>Answer timer</h3></div>
@@ -163,6 +173,29 @@
           <div class="shockwave" id="shock1"></div><div class="shockwave s2" id="shock2"></div>
         </button>
         <p class="tap-hint" id="tapHint">Tap or flick to roll</p>
+      </div>
+    </section>
+
+    <!-- FACE-OFF -->
+    <section class="screen" id="faceoff" data-screen>
+      <div class="fo-half fo-top" id="foTop">
+        <div class="fo-who" id="foTopWho"></div>
+        <button class="buzz" id="buzzTop" aria-label="Buzz in (top player)"><span>BUZZ</span></button>
+        <div class="fo-msg" id="foTopMsg"></div>
+      </div>
+      <div class="fo-mid">
+        <button class="icon-btn fo-menu" data-menu aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button>
+        <div class="fo-prompt flip" id="foPromptTop"></div>
+        <div class="fo-center">
+          <div class="fo-tile" id="foTile">?</div>
+          <div class="fo-count" id="foCount"></div>
+        </div>
+        <div class="fo-prompt" id="foPromptBot"></div>
+      </div>
+      <div class="fo-half fo-bot" id="foBot">
+        <div class="fo-msg" id="foBotMsg"></div>
+        <button class="buzz" id="buzzBot" aria-label="Buzz in (bottom player)"><span>BUZZ</span></button>
+        <div class="fo-who" id="foBotWho"></div>
       </div>
     </section>
 
@@ -294,6 +327,7 @@
           <li><b>Off the board?</b> A valid answer from our answer pool still earns <b>5</b>. If we don't recognise it, the next player judges it, or in <b>Strict</b> mode it scores nothing.</li>
           <li><b>Bonuses.</b> Hit the board fast for up to +10. Hit it on back-to-back turns for a streak bonus.</li>
           <li><b>Reroll.</b> Hate your letter? Every player gets one reroll per game, but the clock keeps running.</li>
+          <li><b>⚡ Face-Off style.</b> Two players share the phone, one at each end. When the letter lands, the first to buzz answers. Hit #1 and you win the face-off; hit a lower answer and your rival gets one shot to steal with a higher one. A wrong buzz costs 5 points. The face-off winner earns +15.</li>
           <li><b>Final round.</b> All points are doubled (or tripled), so anyone can still win.</li>
         </ol>
       </div>

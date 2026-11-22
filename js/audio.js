@@ -140,6 +140,10 @@
       chord([784, 988, 1175, 1568], 0.6, { type: 'triangle', vol: 0.11, strum: 0.05, delay: 0.06, verb: true });
       vib([30, 40, 25]);
     },
+    buzzIn() {
+      tone(392, 0.45, { type: 'sawtooth', lp: 2600, vol: 0.16 }); tone(523, 0.45, { type: 'square', lp: 2200, vol: 0.09 });
+      noise(0.08, { freq: 2500, q: 1, vol: 0.2 }); vib([60, 30, 60]);
+    },
     stinger() {
       chord([392, 523, 659, 784], 0.55, { type: 'sawtooth', lp: 2600, vol: 0.075 });
       chord([196, 262], 0.6, { type: 'triangle', vol: 0.16 });

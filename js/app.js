@@ -28,7 +28,7 @@
     get(k, d) { try { const v = localStorage.getItem('rollem.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('rollem.' + k, JSON.stringify(v)); } catch (e) {} }
   };
-  const settings = Object.assign({ timer: 20, rounds: 5, mult: 2, judge: 'vote', mode: 'all', rating: 'pg13', theme: 'midnight', dice: 'classic' }, store.get('settings', {}));
+  const settings = Object.assign({ timer: 20, rounds: 5, mult: 2, judge: 'vote', mode: 'all', rating: 'pg13', theme: 'midnight', dice: 'classic', order: 'rotate', style: 'classic' }, store.get('settings', {}));
   if (window.RollemLooks) { RollemLooks.applyTheme(settings.theme); RollemLooks.applyDice(settings.dice); }
 
   // Low-end / reduced-motion devices get a lighter effects budget (fewer particles, no extra filters).
@@ -77,6 +77,9 @@
   const isFinal = () => G.round === settings.rounds;
   const mult = () => (isFinal() ? settings.mult : 1);
   const current = () => G.players[G.order[G.turnPos]];
+  const isFO = () => settings.style === 'faceoff' && G.players.length >= 2;
+  // who is answering right now: in Face-Off it's whoever buzzed (or is stealing)
+  const answerer = () => (G.fo && G.fo.answering != null ? G.players[G.fo.answering] : current());
 
   // ---------- screens ----------
   let active = null;
@@ -193,6 +196,7 @@
       settings[key] = isNaN(raw) ? raw : Number(raw); store.set('settings', settings); Sound.select();
       el.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-checked', c === b));
       if (key === 'judge') renderJudgeHint();
+      if (key === 'style' || key === 'order') renderStyleHints();
     };
   }
   function renderPlayers(focusLast) {
@@ -245,6 +249,14 @@
     if (setupNames.length >= MAX_PLAYERS) return;
     Sound.tap(); setupNames.push(''); store.set('players', setupNames); renderPlayers(true);
   });
+  function renderStyleHints() {
+    $('#styleHint').textContent = settings.style === 'faceoff'
+      ? 'Head-to-head buzzer battles on one phone. First to buzz answers; hit #1 to win, or your rival can steal with a higher answer.'
+      : 'Take turns rolling and answering. Everyone gets their own letter.';
+    $('#orderHint').textContent = settings.order === 'rotate'
+      ? 'A different player goes first each round, so nobody always goes first or last.'
+      : 'Players always go in the same order, top to bottom.';
+  }
   function renderJudgeHint() {
     $('#judgeHint').textContent = settings.judge === 'strict'
       ? 'Only answers from our answer pool count: top 5 on the board, plus hundreds more valid answers for 5 pts. No arguing!'
@@ -257,6 +269,9 @@
     renderChips($('#multChips'), MULTS, settings.mult, v => (v === 2 ? '2× Double' : '3× Triple'), 'mult');
     renderChips($('#judgeChips'), ['vote', 'strict'], settings.judge, v => (v === 'vote' ? 'Player judges' : 'Strict: list only'), 'judge');
     renderChips($('#ratingChips'), ['pg13', 'family'], settings.rating, v => (v === 'pg13' ? 'PG-13' : 'Family'), 'rating');
+    renderChips($('#styleChips'), ['classic', 'faceoff'], settings.style, v => (v === 'classic' ? '🎲 Classic turns' : '⚡ Face-Off buzzer'), 'style');
+    renderChips($('#orderChips'), ['rotate', 'same'], settings.order, v => (v === 'rotate' ? 'Rotate first player' : 'Same order'), 'order');
+    renderStyleHints();
     const m = modeOf(settings.mode);
     $('#setupMode').innerHTML = `<span aria-hidden="true">${m.icon}</span>${esc(m.name)}${m.badge ? `<span class="badge">${m.badge}</span>` : ''}`;
     $('#contentPanel').hidden = settings.mode !== 'all';
@@ -280,9 +295,21 @@
     document.body.classList.remove('final-mode');
     startRound();
   }
+  function roundOrder(round) {
+    const n = G.players.length, shift = settings.order === 'rotate' ? (round - 1) % n : 0;
+    return G.players.map((_, i) => (i + shift) % n);
+  }
+  // Face-Off pairings: with 3+ players everyone plays exactly twice per round (neighbours in a ring);
+  // with 2 players they meet three times per round.
+  function buildMatches(order) {
+    const n = order.length;
+    if (n === 2) return [[order[0], order[1]], [order[1], order[0]], [order[0], order[1]]];
+    return order.map((p, i) => [p, order[(i + 1) % n]]);
+  }
+  const turnsThisRound = () => (G.matches ? G.matches.length : G.order.length);
   function startRound() {
-    const n = G.players.length, shift = (G.round - 1) % n;
-    G.order = G.players.map((_, i) => (i + shift) % n);
+    G.order = roundOrder(G.round);
+    G.matches = isFO() ? buildMatches(G.order) : null;
     G.turnPos = 0;
     G.roundStart = G.players.map(p => p.score);
     if (isFinal() && settings.rounds > 1) {
@@ -362,6 +389,8 @@
   })(performance.now());
   const setFaces = arr => { arr.forEach((c, i) => (faces[i].textContent = c)); if (glRoll.ok) glRoll.setFaces(arr); };
   function beginTurn() {
+    G.fo = null;
+    if (isFO()) return beginFaceoff();
     const p = current();
     if (window.RollemLooks) RollemLooks.applyDice(p.dice);
     $('#rollWho').innerHTML = `${avatar(p, 'lg')}<div class="name"><em>${esc(p.name)}</em>'s turn</div>`;
@@ -514,7 +543,7 @@
   // ---------- ANSWER ----------
   const input = $('#answerInput'), lockBtn = $('#lockBtn'), fixNote = $('#fixNote');
   function startAnswer() {
-    const p = current(), t = G.turn;
+    const p = answerer(), t = G.turn;
     $('#ansWho').innerHTML = `${avatar(p, 'sm')}<span>${esc(p.name)}</span>`;
     $('#ansLetter').textContent = t.letter;
     $('#ansPrompt').textContent = t.cat.prompt;
@@ -526,10 +555,12 @@
     rr.textContent = p.rerolls > 0 ? '↻ Reroll' : '↻ Used';
     rr.setAttribute('aria-label', p.rerolls > 0 ? 'Reroll letter (one per game)' : 'Reroll already used');
     const mb = $('#ansMult');
-    if (mult() > 1) { mb.hidden = false; mb.textContent = `Final round · ${mult()}× points`; } else mb.hidden = true;
+    if (G.fo && G.fo.banner) { mb.hidden = false; mb.textContent = G.fo.banner; }
+    else if (mult() > 1) { mb.hidden = false; mb.textContent = `Final round · ${mult()}× points`; } else mb.hidden = true;
+    rr.hidden = !!G.fo;
     show('answer');
     Sound.whoosh();
-    startTimer(settings.timer, G.carry);
+    startTimer(G.fo ? FO_TIME() : settings.timer, G.carry);
     G.carry = null;
     Sound.startMusic();
     setTimeout(() => { if (active && active.id === 'answer') input.focus({ preventScroll: true }); }, 380);
@@ -781,9 +812,10 @@
     const timeLeft = Math.max(0, T.left);
     stopTimer(); stopMic();
     input.blur();
-    const p = current(), t = G.turn;
-    const verdict = E.judge(t.entries, t.letter, val, settings.judge === 'strict');
+    const p = answerer(), t = G.turn;
+    const verdict = E.judge(t.entries, t.letter, val, settings.judge === 'strict' || !!G.fo);
     if (timedOut && verdict.kind === 'blank') verdict.timeout = true;
+    if (G.fo) return foAfterAnswer(val, verdict);
     await reveal(p, t, val, verdict, timeLeft, T.total);
   }
 
@@ -882,7 +914,7 @@
       await sleep(190);
     }
     await sleep(250);
-    const last = G.turnPos >= G.order.length - 1;
+    const last = G.turnPos >= turnsThisRound() - 1;
     next.textContent = last ? (G.round >= settings.rounds ? 'Final results' : 'Standings') : `Next: ${G.players[G.order[G.turnPos + 1]].name}`;
     next.disabled = false;
   }
@@ -903,10 +935,204 @@
 
   $('#nextBtn').addEventListener('click', () => {
     Sound.select();
-    if (G.turnPos < G.order.length - 1) { G.turnPos++; beginTurn(); return; }
+    if (G.turnPos < turnsThisRound() - 1) { G.turnPos++; beginTurn(); return; }
     if (G.round >= settings.rounds) showResults();
     else showStandings();
   });
+
+  // ---------- FACE-OFF ----------
+  const FO_BONUS = 15, FO_MISS = 5;
+  const FO_TIME = () => Math.max(8, Math.min(settings.timer, 12));
+  let foTimers = [];
+  const foLater = (fn, ms) => foTimers.push(setTimeout(fn, ms));
+  function foClear() { foTimers.forEach(clearTimeout); foTimers = []; if (G.fo) G.fo.phase = 'done'; }
+  const foScreen = $('#faceoff');
+  function foSetPlayer(side, idx) {
+    const p = G.players[idx], half = $(side === 'top' ? '#foTop' : '#foBot');
+    half.style.setProperty('--pc', p.color);
+    half.classList.remove('won', 'lost');
+    $(side === 'top' ? '#foTopWho' : '#foBotWho').innerHTML = `${avatar(p, 'sm')}<span>${esc(p.name)}<small>${p.score} pts</small></span>`;
+    $(side === 'top' ? '#foTopMsg' : '#foBotMsg').textContent = '';
+  }
+  function foMsg(idx, text, bad) {
+    const side = idx === G.fo.top ? '#foTopMsg' : '#foBotMsg';
+    const el = $(side); el.textContent = text; el.classList.toggle('bad', !!bad);
+  }
+  function beginFaceoff() {
+    foClear();
+    const [a, b] = G.matches[G.turnPos];
+    const turn = E.pickTurn(bank, history, null, G.salt);
+    E.recordTurn(history, turn); saveHistory();
+    G.turn = turn;
+    G.fo = { bot: a, top: b, phase: 'ready', early: {}, lockUntil: {}, answering: null, first: null, second: null, goAt: 0, banner: '' };
+    foSetPlayer('bot', a); foSetPlayer('top', b);
+    $$('#faceoff .buzz').forEach(x => x.classList.remove('locked'));
+    $('#foTile').textContent = '?'; $('#foTile').className = 'fo-tile';
+    $('#foPromptTop').textContent = $('#foPromptBot').textContent = 'Fingers on the buzzers…';
+    $('#foPromptTop').classList.remove('show'); $('#foPromptBot').classList.remove('show');
+    $('#foCount').textContent = '';
+    foScreen.classList.add('waiting'); foScreen.classList.remove('live');
+    show('faceoff');
+    // suspense: letters flicker for a random 1.4–2.8 s so nobody can time the buzz
+    foLater(() => {
+      if (!G.fo || G.fo.phase !== 'ready') return;
+      Sound.drumroll(1400);
+      const tile = $('#foTile'); tile.classList.add('spin');
+      const iv = setInterval(() => { tile.textContent = randLetter(); Sound.rattle(); }, 85);
+      foTimers.push(iv);
+      foLater(() => { clearInterval(iv); foGo(); }, 1400 + Math.random() * 1400);
+    }, 700);
+  }
+  function foGo() {
+    const fo = G.fo; if (!fo || fo.phase !== 'ready') return;
+    const t = G.turn;
+    const tile = $('#foTile'); tile.classList.remove('spin'); tile.textContent = t.letter;
+    tile.classList.remove('land'); void tile.offsetWidth; tile.classList.add('land');
+    $('#foPromptTop').textContent = $('#foPromptBot').textContent = t.cat.prompt;
+    $('#foPromptTop').classList.add('show'); $('#foPromptBot').classList.add('show');
+    fo.phase = 'live'; fo.goAt = performance.now();
+    // a false start locks that player out for 1 s after the letter lands
+    [fo.top, fo.bot].forEach(i => {
+      if (!fo.early[i]) return;
+      fo.lockUntil[i] = fo.goAt + 1000;
+      foLater(() => { if (G.fo !== fo || fo.phase !== 'live') return; $(i === fo.top ? '#buzzTop' : '#buzzBot').classList.remove('locked'); foMsg(i, ''); }, 1000);
+    });
+    foScreen.classList.remove('waiting'); foScreen.classList.add('live');
+    Sound.stinger();
+    // nobody buzzes within 10 s -> dead face-off
+    let left = 10; $('#foCount').textContent = '';
+    const cd = setInterval(() => {
+      if (!G.fo || G.fo.phase !== 'live') return clearInterval(cd);
+      left--; if (left <= 5) { $('#foCount').textContent = left; Sound.tick(true); }
+      if (left <= 0) { clearInterval(cd); fo.phase = 'resolved'; Sound.timeup(); foReveal(null); }
+    }, 1000);
+    foTimers.push(cd);
+  }
+  function foBuzz(side, e) {
+    if (e) e.preventDefault();
+    const fo = G.fo; if (!fo || !active || active.id !== 'faceoff') return;
+    const idx = side === 'top' ? fo.top : fo.bot, btn = side === 'top' ? $('#buzzTop') : $('#buzzBot');
+    const now = performance.now();
+    if (fo.phase === 'ready') {
+      if (fo.early[idx]) return;
+      fo.early[idx] = true;
+      btn.classList.add('locked'); foMsg(idx, 'TOO EARLY! 1s penalty', true);
+      Sound.buzz();
+      return;
+    }
+    if (fo.phase !== 'live') return;
+    if (fo.lockUntil[idx] && now < fo.lockUntil[idx]) { Sound.tap(); foMsg(idx, 'Locked…', true); return; }
+    fo.phase = 'buzzed';
+    $$('#faceoff .buzz').forEach(x => x.classList.add('locked'));
+    btn.classList.remove('locked');
+    const other = idx === fo.top ? fo.bot : fo.top;
+    $(idx === fo.top ? '#foTop' : '#foBot').classList.add('won');
+    $(idx === fo.top ? '#foBot' : '#foTop').classList.add('lost');
+    foScreen.classList.remove('live');
+    const rt = ((now - fo.goAt) / 1000).toFixed(2);
+    foMsg(idx, `⚡ ${rt}s!`); foMsg(other, `${G.players[idx].name} buzzed first`);
+    Sound.buzzIn(); FX.at(btn, 60, { speed: 11 });
+    fo.first = { p: idx, rt };
+    foLater(() => foHandoff(idx, `${G.players[idx].name}, take the phone!`, `Buzzed in ${rt}s · answer before the clock runs out`, 'buzz'), 900);
+  }
+  ['pointerdown'].forEach(ev => {
+    $('#buzzTop').addEventListener(ev, e => foBuzz('top', e));
+    $('#buzzBot').addEventListener(ev, e => foBuzz('bot', e));
+  });
+  async function foHandoff(idx, big, sub, kind, rank) {
+    const fo = G.fo; if (!fo) return;
+    fo.answering = idx; fo.kind = kind;
+    fo.banner = kind === 'steal' ? `⚔️ Steal: beat #${rank + 1} to win the face-off` : kind === 'open' ? '🎯 Your shot: any board answer wins it' : '⚡ Face-Off: hit #1 to win outright';
+    const sp = $('#splash');
+    $('#splashKicker').textContent = kind === 'buzz' ? 'Face-Off' : kind === 'steal' ? 'Steal attempt' : 'Second chance';
+    $('#splashBig').textContent = big;
+    $('#splashSub').textContent = sub;
+    sp.hidden = false; sp.classList.remove('show'); void sp.offsetWidth; sp.classList.add('show');
+    Sound.whoosh();
+    await sleep(1500);
+    sp.hidden = true; sp.classList.remove('show');
+    if (G.fo !== fo) return;
+    startAnswer();
+  }
+  function foAfterAnswer(val, v) {
+    const fo = G.fo;
+    const rec = { p: fo.answering, val, v, board: v.kind === 'board', rank: v.kind === 'board' ? v.rank : 99 };
+    const other = fo.answering === fo.top ? fo.bot : fo.top;
+    if (fo.kind === 'buzz') {
+      fo.first = Object.assign(fo.first || {}, rec);
+      if (rec.board && rec.rank === 0) return foReveal(rec.p);
+      const nm = G.players[other].name;
+      if (rec.board) return foHandoff(other, `${nm}, steal it!`, `${G.players[rec.p].name} said “${v.entry.display}” (#${rec.rank + 1}). Name a HIGHER answer to steal the face-off.`, 'steal', rec.rank);
+      return foHandoff(other, `${nm}, your shot!`, `${G.players[rec.p].name} missed. Any answer on the board wins it for you.`, 'open');
+    }
+    fo.second = rec;
+    if (fo.kind === 'steal') return foReveal(rec.board && rec.rank < fo.first.rank ? rec.p : fo.first.p);
+    return foReveal(rec.board ? rec.p : null);
+  }
+  async function foReveal(winner) {
+    const fo = G.fo; if (!fo) return;
+    fo.phase = 'resolved'; fo.answering = null;
+    const t = G.turn, m = mult();
+    const scores = {};
+    const add = (i, n) => { scores[i] = (scores[i] || 0) + n; };
+    const recs = [fo.first, fo.second].filter(r => r && r.v);
+    recs.forEach(r => { if (r.board) add(r.p, t.counts[r.rank]); });
+    if (fo.first && fo.first.v && !fo.first.board) add(fo.first.p, -FO_MISS);
+    if (winner != null) add(winner, FO_BONUS);
+    Object.keys(scores).forEach(i => {
+      const pl = G.players[i], delta = scores[i] * m;
+      pl.score = Math.max(0, pl.score + delta);
+      scores[i] = delta;
+    });
+    recs.forEach(r => {
+      const pl = G.players[r.p];
+      if (r.board) { pl.hits++; if (r.rank === 0) pl.tops++; }
+      G.log.push({ player: pl, round: G.round, letter: t.letter, prompt: t.cat.prompt, answer: r.val, kind: r.v.kind, rank: r.v.rank, pts: Math.max(0, scores[r.p] || 0), timeUsed: 99999 });
+    });
+
+    // reveal screen
+    const scr = $('#reveal');
+    const A = G.players[fo.bot], B = G.players[fo.top];
+    $('#revWho').innerHTML = `${avatar(A, 'sm')}<span>${esc(A.name)} vs ${esc(B.name)}</span>`;
+    $('#revLetter').textContent = t.letter;
+    $('#revPrompt').textContent = t.cat.prompt;
+    const line = r => {
+      const pl = G.players[r.p];
+      const tag = r.board ? `<span class="tagx hit">#${r.rank + 1}</span>` : `<span class="tagx miss">${r.v.kind === 'blank' ? 'no answer' : r.v.kind === 'wrongLetter' ? 'wrong letter' : 'not on board'}</span>`;
+      return `<div class="fo-line"><b>${esc(pl.name)}:</b> ${r.val ? esc(r.val) : '—'} ${tag}</div>`;
+    };
+    const ya = $('#yourAnswer'); ya.className = 'your-answer';
+    ya.innerHTML = `<small>Face-Off answers</small>${recs.length ? recs.map(line).join('') : '<div class="fo-line">Nobody buzzed in!</div>'}`;
+    $('#board').innerHTML = t.entries.slice(0, 5).map((e, i) => slotHTML(e, t.counts[i], i)).join('');
+    $('#verdict').innerHTML = ''; $('#vote').hidden = true; scr.classList.remove('voting');
+    const next = $('#nextBtn'); next.disabled = true; next.textContent = 'Next';
+    show('reveal');
+    Sound.drumroll(600);
+    await sleep(700);
+    const slots = $$('#board .slot');
+    for (const r of recs) {
+      if (!r.board) continue;
+      slots[r.rank].classList.add('open', r.p === winner ? 'hit' : 'hit2'); Sound.flip();
+      await sleep(420);
+      if (r.rank === 0) Sound.top(); else Sound.ding();
+      FX.at(slots[r.rank], r.rank === 0 ? 100 : 60, { speed: 11 });
+      await sleep(450);
+    }
+    if (winner == null) { Sound.buzz(); }
+    const W = winner != null ? G.players[winner] : null;
+    const chips = Object.keys(scores).map(i => `<span>${esc(G.players[i].name)} ${scores[i] >= 0 ? '+' : ''}${scores[i]}</span>`);
+    if (m > 1) chips.push(`<span>×${m} Final</span>`);
+    $('#verdict').innerHTML = `<div class="v-title ${W ? 'good' : 'bad'}">${W ? esc(W.name).toUpperCase() + ' WINS IT!' : 'NOBODY WINS'}</div>
+      <div class="v-pts">${W ? '+<span id="ptsNum">0</span>' : '0'}</div>
+      ${chips.length ? `<div class="v-break">${chips.join('')}</div>` : ''}`;
+    if (W) { countUp($('#ptsNum'), 0, scores[winner] || 0, 700); FX.rain(60); }
+    for (let i = 0; i < slots.length; i++) { if (!slots[i].classList.contains('open')) { slots[i].classList.add('open'); Sound.flip(); await sleep(170); } }
+    await sleep(250);
+    const last = G.turnPos >= turnsThisRound() - 1;
+    if (last) next.textContent = G.round >= settings.rounds ? 'Final results' : 'Standings';
+    else { const [a2, b2] = G.matches[G.turnPos + 1]; next.textContent = `Next: ${G.players[a2].name} vs ${G.players[b2].name}`; }
+    next.disabled = false;
+  }
 
   // ---------- STANDINGS ----------
   function ranked() { return G.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.score - a.p.score || b.p.hits - a.p.hits || a.i - b.i); }
@@ -916,8 +1142,10 @@
     const nextFinal = G.round + 1 === settings.rounds;
     $('#standTitle').textContent = `After round ${G.round}`;
     $('#standNext').textContent = nextFinal ? `Final round · ${settings.mult}×` : `Round ${G.round + 1}`;
-    const firstNext = G.players[G.round % G.players.length];
-    $('#standSub').innerHTML = `Next up: <b>${esc(firstNext.name)}</b> rolls first${nextFinal ? ' · every point counts ' + settings.mult + '×' : ''}`;
+    const nextOrder = roundOrder(G.round + 1);
+    const nm = i => esc(G.players[i].name);
+    $('#standSub').innerHTML = (isFO() ? `First face-off: <b>${nm(nextOrder[0])}</b> vs <b>${nm(nextOrder[1])}</b>` : `Next up: <b>${nm(nextOrder[0])}</b> rolls first`) +
+      (nextFinal ? ' · every point counts ' + settings.mult + '×' : '');
     const list = $('#standList');
     const rankOf = sc => 1 + now.filter(x => x.p.score > sc).length;
     list.innerHTML = now.map(({ p, i }, r) => {
@@ -990,10 +1218,12 @@
 
   // ---------- menu ----------
   $$('[data-menu]').forEach(b => b.addEventListener('click', () => { Sound.tap(); pauseTimer('menu'); openModal('#menuModal'); }));
-  function abortGame() { closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear(); document.body.classList.remove('final-mode'); }
+  function abortGame() { foClear(); abortGame2(); }
+  function abortGame2() { closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear(); document.body.classList.remove('final-mode'); }
   $('#restartBtn').addEventListener('click', () => { Sound.select(); abortGame(); newGame(G.players.map(p => p.name), G.players.map(p => p.dice)); });
   $('#changeModeBtn').addEventListener('click', () => { Sound.tap(); abortGame(); renderModes(); show('modes'); });
   $('#modeAgainBtn').addEventListener('click', () => { Sound.tap(); FX.clear(); renderModes(); show('modes'); });
+  $('#quitBtn').addEventListener('click', () => { foClear(); });
   $('#quitBtn').addEventListener('click', () => {
     Sound.tap(); closeModal('#menuModal'); pauses.clear(); stopTimer(); stopMic(); FX.clear();
     document.body.classList.remove('final-mode'); show('home');
